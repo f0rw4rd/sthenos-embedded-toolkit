@@ -1,0 +1,249 @@
+#!/bin/bash
+# Main build script for Stheno Embedded Toolkit (Alpine version)
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Default values
+TOOLS="all"
+ARCHITECTURES="all"
+DEBUG=""
+DOWNLOAD_ONLY=false
+CLEAN=false
+INTERACTIVE=false
+
+# Parse arguments
+for arg in "$@"; do
+    case $arg in
+        --arch=*)
+            ARCHITECTURES="${arg#*=}"
+            ;;
+        --arch)
+            # Skip, next arg will be the architecture
+            ;;
+        -j*)
+            # Deprecated - parallel builds removed
+            echo "Warning: -j option is deprecated. Builds are now sequential per architecture."
+            echo "         Compilation still uses all CPU cores with make -j$(nproc)"
+            ;;
+        --mode=*)
+            # Mode option removed - always uses embedded optimizations
+            echo "Warning: --mode option is deprecated. All builds use embedded optimizations."
+            shift
+            ;;
+        -d|--debug)
+            DEBUG="1"
+            ;;
+        --download)
+            DOWNLOAD_ONLY=true
+            ;;
+        --clean)
+            CLEAN=true
+            ;;
+        -i|--interactive)
+            INTERACTIVE=true
+            ;;
+        --help|-h)
+            echo "Usage: $0 [TOOL] [OPTIONS]"
+            echo ""
+            echo "Build static binaries for embedded systems."
+            echo ""
+            echo "TOOL:"
+            echo "  all         Build all tools (default)"
+            echo "  strace      System call tracer"
+            echo "  busybox     Multi-call binary with Unix utilities"
+            echo "  busybox_nodrop  BusyBox variant that maintains SUID privileges"
+            echo "  bash        Bourne Again Shell"
+            echo "  socat       Socket relay tool (without SSL)"
+            echo "  socat-ssl   Socket relay tool (with OpenSSL)"
+            echo "  ncat        Network utility (without SSL)"
+            echo "  ncat-ssl    Network utility (with OpenSSL)"
+            echo "  tcpdump     Network packet analyzer"
+            echo "  gdbserver   Remote debugging server"
+            echo "  gdb         GNU debugger"
+            echo "  nmap        Network exploration and security auditing"
+            echo "  dropbear    Lightweight SSH server/client (includes scp)"
+            echo "  ltrace      Library call tracer (glibc-based)"
+            echo ""
+            echo "OPTIONS:"
+            echo "  --arch ARCH      Build for specific architecture only"
+            echo "  --arch all       Build for all architectures (default)"
+            echo "  -d, --debug      Debug mode (verbose output)"
+            echo "  -i, --interactive  Launch interactive shell in build container"
+            echo "  --download       Download sources and toolchains only"
+            echo "  --clean          Clean output and logs directories"
+            echo ""
+            echo "ARCHITECTURES:"
+            echo "  ARM 32-bit: arm32v5le arm32v5lehf arm32v7le arm32v7lehf"
+            echo "              armeb armv6 armv7m armv7r"
+            echo "  ARM 64-bit: aarch64 aarch64_be"
+            echo "  x86 32-bit: i486 ix86le (i686)"
+            echo "  x86 64-bit: x86_64"
+            echo "  MIPS 32-bit: mips32v2le mips32v2be mipsn32 mipsn32el"
+            echo "  MIPS 64-bit: mips64 mips64le mips64n32 mips64n32el"
+            echo "  PowerPC: ppc32be powerpcle powerpc64 ppc64le"
+            echo "  SuperH: sh2 sh2eb sh4 sh4eb"
+            echo "  Others: microblaze microblazeel or1k m68k s390x"
+            echo "  RISC-V: riscv32 riscv64"
+            echo ""
+            echo "EXAMPLES:"
+            echo "  $0                       # Build all tools for all architectures"
+            echo "  $0 strace                # Build strace for all architectures"
+            echo "  $0 --arch x86_64         # Build all tools for x86_64"
+            echo "  $0 strace --arch x86_64  # Build strace for x86_64 only"
+            exit 0
+            ;;
+        strace|busybox|busybox_nodrop|bash|socat|socat-ssl|ncat|ncat-ssl|tcpdump|gdbserver|gdb|nmap|dropbear|ltrace)
+            TOOLS="$arg"
+            ;;
+        arm32v5le|arm32v5lehf|arm32v7le|arm32v7lehf|armeb|armv6|armv7m|armv7r|\
+        mips32v2le|mips32v2be|mipsn32|mipsn32el|mips64|mips64le|mips64n32|mips64n32el|\
+        ppc32be|powerpcle|powerpc64|ppc64le|\
+        i486|ix86le|x86_64|aarch64|aarch64_be|\
+        sh2|sh2eb|sh4|sh4eb|\
+        microblaze|microblazeel|or1k|m68k|s390x|\
+        riscv32|riscv64)
+            ARCHITECTURES="$arg"
+            ;;
+        all)
+            # Could be tools or architectures, keep default
+            ;;
+        *)
+            # Check if previous arg was --arch
+            if [[ "${prev_arg}" == "--arch" ]]; then
+                ARCHITECTURES="$arg"
+            else
+                echo "Error: Invalid architecture '$arg'"
+                echo ""
+                exec "$0" --help
+            fi
+            ;;
+    esac
+    prev_arg="$arg"
+done
+
+# Validate architecture if specified and not "all"
+if [ -n "$ARCHITECTURES" ] && [ "$ARCHITECTURES" != "all" ]; then
+    # List of valid architectures
+    VALID_ARCHS="arm32v5le arm32v5lehf arm32v7le arm32v7lehf armeb armv6 armv7m armv7r \
+                 mips32v2le mips32v2be mipsn32 mipsn32el mips64 mips64le mips64n32 mips64n32el \
+                 ppc32be powerpcle powerpc64 ppc64le \
+                 i486 ix86le x86_64 aarch64 aarch64_be \
+                 sh2 sh2eb sh4 sh4eb \
+                 microblaze microblazeel or1k m68k s390x \
+                 riscv32 riscv64"
+    
+    # Check if architecture is valid
+    valid=false
+    for valid_arch in $VALID_ARCHS; do
+        if [ "$ARCHITECTURES" = "$valid_arch" ]; then
+            valid=true
+            break
+        fi
+    done
+    
+    if [ "$valid" = false ]; then
+        echo "Error: Invalid architecture '$ARCHITECTURES'"
+        echo ""
+        exec "$0" --help
+    fi
+fi
+
+echo "=============================================="
+echo "Embedded Toolkit Build Pipeline (Alpine)"
+echo "=============================================="
+echo "Start time: $(date)"
+echo
+
+# Handle clean mode
+if [ "$CLEAN" = true ]; then
+    echo "Cleaning output and logs directories..."
+    # Use Docker to clean with proper permissions
+    docker run --rm \
+        -v "${PWD}:/build" \
+        sthenos-musl-builder \
+        bash -c "rm -rf /build/output/* /build/logs/* && echo 'Clean complete!'"
+    echo "- Removed all files from output/"
+    echo "- Removed all files from logs/"
+    exit 0
+fi
+
+# Handle interactive mode
+if [ "$INTERACTIVE" = true ]; then
+    echo "Starting interactive shell in build container..."
+    echo "=============================================="
+    echo "You are now in the Stheno build environment"
+    echo "Build directory: /build"
+    echo "Sources cache: /build/sources"
+    echo "Toolchains cache: /build/toolchains"
+    echo "=============================================="
+    exec docker run --rm -it \
+        -v "${PWD}:/build" \
+        -v sources-cache:/build/sources \
+        -v toolchains-cache:/build/toolchains \
+        -v deps-cache:/build/deps-cache \
+        -w /build \
+        sthenos-musl-builder \
+        /bin/bash
+fi
+
+# Handle download-only mode
+if [ "$DOWNLOAD_ONLY" = true ]; then
+    echo "Download-only mode: fetching sources and toolchains..."
+    # For now, just list what would be downloaded
+    echo "Would download sources to: $(pwd)/sources/"
+    echo "Would download toolchains to: $(pwd)/toolchains/"
+    echo "Note: Actual download happens inside Docker during build"
+    exit 0
+fi
+
+# Build Docker image
+if ! docker image inspect sthenos-musl-builder >/dev/null 2>&1; then
+    echo "Building Docker image..."
+    docker build -t sthenos-musl-builder -f Dockerfile.musl .
+fi
+
+# Set debug flags if enabled
+if [ -n "$DEBUG" ]; then
+    DEBUG_FLAGS="-e DEBUG=1"
+    DEBUG_CMD="bash -x"
+else
+    DEBUG_FLAGS=""
+    DEBUG_CMD=""
+fi
+
+# Route ltrace to glibc build system
+if [ "$TOOLS" = "ltrace" ]; then
+    # Build glibc Docker image if needed
+    if ! docker image inspect sthenos-glibc-builder >/dev/null 2>&1; then
+        echo "Building glibc Docker image..."
+        docker build -t sthenos-glibc-builder -f Dockerfile.glibc .
+    fi
+    
+    # Use glibc build system for ltrace
+    exec docker run --rm \
+        -v "${PWD}:/build" \
+        -v sources-cache:/build/sources \
+        -v toolchains-preload-cache:/build/toolchains-preload \
+        -v deps-cache:/build/deps-cache \
+        $DEBUG_FLAGS \
+        sthenos-glibc-builder:latest \
+        $DEBUG_CMD /build/scripts/build-unified-glibc.sh \
+        "$TOOLS" \
+        "$ARCHITECTURES"
+else
+    # Always use unified build system for musl tools
+    exec docker run --rm \
+        -v "${PWD}:/build" \
+        -v sources-cache:/build/sources \
+        -v toolchains-cache:/build/toolchains \
+        -v deps-cache:/build/deps-cache \
+        $DEBUG_FLAGS \
+        -e SKIP_IF_EXISTS="${SKIP_IF_EXISTS:-true}" \
+        sthenos-musl-builder:latest \
+        $DEBUG_CMD /build/scripts/build-unified.sh \
+        --log \
+        "$TOOLS" \
+        "$ARCHITECTURES"
+fi

@@ -1,0 +1,62 @@
+# Dockerfile for building security tools with musl libc
+# Alpine-based for static musl builds
+# Used by: ./build script for main tool compilation
+FROM alpine:3.18
+
+# Install build dependencies
+RUN apk update && apk add --no-cache \
+    build-base \
+    gcc g++ make cmake automake autoconf libtool \
+    pkgconf \
+    git wget curl \
+    tar gzip bzip2 xz \
+    patch \
+    python3 py3-pip \
+    bison flex \
+    texinfo \
+    gawk \
+    bc \
+    ncurses-dev \
+    openssl-dev \
+    zlib-dev \
+    expat-dev \
+    libffi-dev \
+    gmp-dev mpc1-dev mpfr-dev \
+    ccache \
+    bash \
+    coreutils \
+    linux-headers \
+    musl-dev \
+    readline-dev \
+    libpcap-dev \
+    # GNU parallel for faster downloads
+    parallel
+
+# Set ccache configuration
+ENV CCACHE_DIR=/root/.ccache
+ENV CCACHE_MAXSIZE=5G
+ENV CCACHE_COMPRESS=1
+ENV PATH="/usr/lib/ccache:$PATH"
+
+# Create directories
+RUN mkdir -p /build/sources /build/toolchains /build/deps-cache /build/output /build/logs && \
+    mkdir -p /build/scripts
+
+WORKDIR /build
+
+# Copy download script
+COPY scripts/download-toolchains.sh /build/scripts/
+
+# Download all musl toolchains during build
+# This ensures toolchains are available at runtime
+RUN echo "==================================" && \
+    echo "Downloading Musl Toolchains" && \
+    echo "==================================" && \
+    /build/scripts/download-toolchains.sh && \
+    echo "==================================" && \
+    echo "Toolchains downloaded successfully" && \
+    echo "==================================" && \
+    ls -la /build/toolchains/
+
+# Default command
+CMD ["/bin/bash"]

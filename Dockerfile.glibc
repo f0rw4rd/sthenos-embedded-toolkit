@@ -1,0 +1,76 @@
+# Dockerfile for building preload libraries with glibc cross-compilers
+# Ubuntu-based for full glibc compatibility with Bootlin toolchains
+# Used by: ./build-preload script for glibc preload library compilation
+
+FROM ubuntu:20.04
+
+# Prevent interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies for building and using pre-built glibc toolchains
+RUN apt-get update && apt-get install -y \
+    # Build essentials
+    build-essential \
+    git \
+    autoconf \
+    automake \
+    libtool \
+    libtool-bin \
+    pkg-config \
+    # Download tools
+    wget \
+    curl \
+    # Archive tools
+    tar \
+    gzip \
+    bzip2 \
+    xz-utils \
+    # Python
+    python3 \
+    python3-pip \
+    # Build dependencies
+    bison \
+    flex \
+    texinfo \
+    gawk \
+    bc \
+    # Development libraries
+    libncurses5-dev \
+    libssl-dev \
+    zlib1g-dev \
+    # Useful for debugging
+    file \
+    strace \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create directories
+RUN mkdir -p /build/toolchains-preload && \
+    mkdir -p /build/output-preload && \
+    mkdir -p /build/logs-preload && \
+    mkdir -p /build/scripts/preload/lib && \
+    mkdir -p /build/configs
+
+# Create build user for consistency
+RUN useradd -m -s /bin/bash builder && \
+    echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+# Set ownership
+RUN chown -R builder:builder /build
+
+# Switch to builder user
+USER builder
+WORKDIR /build
+
+# Copy scripts needed for downloading toolchains
+COPY --chown=builder:builder scripts/preload/download-toolchains.sh /build/scripts/preload/
+COPY --chown=builder:builder scripts/preload/download-all-toolchains.sh /build/scripts/preload/
+COPY --chown=builder:builder scripts/preload/lib/common.sh /build/scripts/preload/lib/
+
+# Build argument for parallel downloads (default: 8)
+ARG TOOLCHAIN_PARALLEL_DOWNLOADS=8
+
+# Download all toolchains during build
+RUN TOOLCHAIN_PARALLEL_DOWNLOADS=${TOOLCHAIN_PARALLEL_DOWNLOADS} /build/scripts/preload/download-all-toolchains.sh
+
+# Default command
+CMD ["/build/scripts/preload/build-unified.sh"]

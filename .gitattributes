@@ -1,0 +1,2 @@
+output/**/* filter=lfs diff=lfs merge=lfs -text
+output-preload/**/*.so filter=lfs diff=lfs merge=lfs -text

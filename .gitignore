@@ -1,0 +1,315 @@
+# Medusa Embedded Toolkit .gitignore
+
+### Build Output ###
+# Compiled binaries and executables
+# output/ is now tracked in the repository
+*/output/
+*.bin
+*.elf
+*.exe
+*.out
+*.app
+*.hex
+
+# Static libraries
+*.a
+*.lib
+
+# Shared objects (inc. Windows DLLs)
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+### Build Artifacts ###
+# Build directories (but not build/ itself, which contains scripts)
+_build/
+builds/
+dist/
+target/
+
+# Intermediate build files
+*.d
+*.dep
+*.mk
+.depend
+
+### Logs ###
+# Log files
+*.log
+logs/
+logs-glibc-static/
+*.log.*
+*.log[0-9]*
+test-results/
+test-reports/
+# Temporary build log
+build-socat.log_
+
+# Build logs with timestamps
+*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].log
+
+# Verification reports
+verification-report.txt
+verification-*.txt
+
+### Build Directory Specific ###
+# Since build is now a script at root, ignore old build directory artifacts
+build_old/
+old_build/
+
+### Cache Directories ###
+# ccache
+.ccache/
+ccache/
+*/ccache/
+
+# Generic cache
+cache/
+.cache/
+__pycache__/
+*.pyc
+*.pyo
+
+### Docker ###
+# Docker volumes
+docker-volumes/
+.docker/
+deps-cache/
+deps-glibc-static/
+
+# Docker-specific files
+.dockerignore
+docker-compose.override.yml
+docker-compose.*.yml
+
+# Container-specific
+.container/
+containers/
+
+### Sources and Downloads ###
+# Downloaded source archives
+sources/*.tar.gz
+sources/*.tar.bz2
+sources/*.tar.xz
+sources/*.zip
+sources/*.tgz
+# But keep the gdb, gmp, mpfr sources we already have
+!sources/gdb-*.tar.xz
+!sources/gmp-*.tar.xz
+!sources/mpfr-*.tar.xz
+# Ignore extracted source directories
+sources/*/
+
+# Toolchains (downloaded musl.cc toolchains)
+toolchains/
+cross-compilers/
+
+### Temporary Files ###
+# Temporary directories
+tmp/
+temp/
+.tmp/
+*.tmp
+*.temp
+tmp-work/
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+*~
+.*.swp
+.*.swo
+
+# Backup build scripts
+build.debian
+build.backup
+
+# Lock files
+*.lock
+.lock
+package-lock.json
+yarn.lock
+
+### IDE and Editor Files ###
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Eclipse
+.metadata/
+.project
+.classpath
+.settings/
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+.netrwhist
+tags
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Kate
+*.kate-swp
+
+### Operating System ###
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+.directory
+.Trash-*
+
+### Archive Files ###
+# Archives (except in specific locations)
+*.tar
+*.tar.gz
+*.tgz
+*.tar.bz2
+*.tbz2
+*.tar.xz
+*.txz
+*.zip
+*.7z
+*.rar
+*.gz
+*.bz2
+*.xz
+
+# Allow archives in docs directory
+!docs/**/*.tar.gz
+!docs/**/*.zip
+
+### Debugging ###
+# Core dumps
+core
+core.*
+*.core
+vgcore.*
+
+# Debug symbols
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+### Security ###
+# Private keys
+*.pem
+*.key
+*.p12
+*.pfx
+*_rsa
+*_dsa
+*_ecdsa
+*_ed25519
+
+# Credentials
+.env
+.env.*
+secrets/
+credentials/
+*.secret
+
+### Project Specific ###
+# Test binaries
+test-*
+!test-*.sh
+!test-*.py
+
+# Configuration overrides
+*.override
+*.local
+
+# Generated documentation
+docs/_build/
+docs/generated/
+
+# Analysis results
+analysis/
+reports/
+*.report
+
+# Benchmark results
+benchmarks/results/
+*.bench
+
+# Coverage reports
+coverage/
+*.coverage
+.coverage.*
+htmlcov/
+
+### Exceptions ###
+# Keep important scripts
+!build/*.sh
+!scripts/*.sh
+!scripts/**/*.sh
+
+# Keep configuration files
+!configs/*
+!*.config
+!Dockerfile*
+
+# Keep documentation
+!README*
+!LICENSE*
+!CHANGELOG*
+*.md
+
+# Keep ccache config
+!ccache.conf
+
+# Keep GitHub workflows
+!.github/
+
+# Allow output-preload directory
+!output-preload/
+
+# Temporary test directories
+build-test/
+gdb-14.1/
+checksums-preload.sha256
