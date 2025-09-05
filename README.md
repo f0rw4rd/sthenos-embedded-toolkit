@@ -230,6 +230,30 @@ ls -la output/*/
 ls -la output/*/strace
 ```
 
+## Custom Tools Examples
+
+### example-custom-tool
+Template for adding custom C programs to the build system:
+
+```bash
+./build custom              # Build for all architectures
+./build custom --arch x86_64    # Specific architecture
+./build custom-glibc --arch x86_64  # Use glibc instead of musl
+```
+
+See `scripts/tools/build-custom.sh` for the documented template.
+
+### example-custom-lib
+Example static library with cross-compilation:
+
+```bash
+cd example-custom-lib
+make
+./test-mylib "Hello World"
+```
+
+Both examples demonstrate proper integration with the Sthenos build system.
+
 ## Credits
 
 This project builds upon the work of several excellent projects:
