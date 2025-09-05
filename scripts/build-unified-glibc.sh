@@ -39,7 +39,7 @@ ARCH="${2:-all}"
 DEBUG="${DEBUG:-}"
 
 get_glibc_tools() {
-    echo "ltrace"
+    echo "ltrace custom-glibc"
 }
 
 map_arch_to_musl() {

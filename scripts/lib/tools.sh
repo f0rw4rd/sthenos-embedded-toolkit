@@ -24,6 +24,7 @@ declare -A TOOL_SCRIPTS=(
     ["ply"]="$SCRIPT_DIR/../tools/build-ply.sh"
     ["can-utils"]="$SCRIPT_DIR/../tools/build-can-utils.sh"
     ["shell-static"]="$SCRIPT_DIR/../tools/build-shell-static.sh"
+    ["custom"]="$SCRIPT_DIR/../tools/build-custom.sh"
 )
 
 build_tool() {

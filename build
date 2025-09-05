@@ -67,6 +67,8 @@ for arg in "$@"; do
             echo "  ply         Dynamic tracer using BPF (limited arch support, LE only)"
             echo "  can-utils   CAN bus utilities (candump, cansend, etc.)"
             echo "  shell-static Shell utilities as static executables (output/<arch>/shell/)"
+            echo "  custom      Custom tool template (musl, modify scripts/tools/build-custom.sh)"
+            echo "  custom-glibc Custom tool template built with glibc"
             echo ""
             echo "OPTIONS:"
             echo "  --arch ARCH      Build for specific architecture only"
@@ -96,8 +98,13 @@ for arg in "$@"; do
             echo "  $0 strace --arch x86_64  # Build strace for x86_64 only"
             exit 0
             ;;
-        strace|busybox|busybox_nodrop|bash|socat|socat-ssl|ncat|ncat-ssl|tcpdump|gdbserver|nmap|dropbear|ltrace|ply|can-utils|shell-static)
+        strace|busybox|busybox_nodrop|bash|socat|socat-ssl|ncat|ncat-ssl|tcpdump|gdbserver|nmap|dropbear|ltrace|ply|can-utils|shell-static|custom)
             TOOLS="$arg"
+            ;;
+        custom-glibc)
+            # Alias for building custom tool with glibc
+            TOOLS="custom-glibc"
+            CUSTOM_LIBC="glibc"
             ;;
         arm32v5le|arm32v5lehf|arm32v7le|arm32v7lehf|armeb|armv6|armv7m|armv7r|\
         mips32v2le|mips32v2be|mipsn32|mipsn32el|mips64|mips64le|mips64n32|mips64n32el|\
@@ -229,15 +236,15 @@ if ! docker image inspect sthenos-musl-builder >/dev/null 2>&1; then
     docker build -t sthenos-musl-builder -f Dockerfile.musl .
 fi
 
-# Route ltrace to glibc build system
-if [ "$TOOLS" = "ltrace" ]; then
+# Route ltrace and custom-glibc to glibc build system
+if [ "$TOOLS" = "ltrace" ] || [ "$CUSTOM_LIBC" = "glibc" ]; then
     # Build glibc Docker image if needed
     if ! docker image inspect sthenos-glibc-builder >/dev/null 2>&1; then
         echo "Building glibc Docker image..."
         docker build -t sthenos-glibc-builder -f Dockerfile.glibc .
     fi
     
-    # Use glibc build system for ltrace
+    # Use glibc build system
     exec docker run --rm \
         -v "${PWD}:/build" \
         -v sources-cache:/build/sources \

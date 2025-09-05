@@ -161,7 +161,7 @@ do_build() {
 
 log_info "Tools: ${TOOLS_TO_BUILD[@]}"
 log_info "Mode: $MODE"
-log_info "Build mode: Sequential per architecture, parallel compilation"
+log_info "Build mode: Sequential (parallel compilation within each build)"
 log_info "Logging: $LOG_ENABLED"
 echo
 

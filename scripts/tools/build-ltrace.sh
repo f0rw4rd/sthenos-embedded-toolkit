@@ -3,18 +3,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ -f "$SCRIPT_DIR/../lib/logging.sh" ]; then
-    source "$SCRIPT_DIR/../lib/logging.sh"
-else
-    log() { log_tool "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
-    log_error() { log_tool "$(date '+%Y-%m-%d %H:%M:%S')" "ERROR: $*" >&2; }
-fi
-
-if [ -f "$SCRIPT_DIR/../lib/common.sh" ]; then
-    source "$SCRIPT_DIR/../lib/common.sh"
-elif [ -f "$SCRIPT_DIR/../preload/lib/common.sh" ]; then
-    source "$SCRIPT_DIR/../preload/lib/common.sh"
-fi
+source "$SCRIPT_DIR/../lib/logging.sh"
+source "$SCRIPT_DIR/../lib/common.sh"
 
 TOOL_NAME="ltrace"
 TOOL_VERSION="0.7.3-git"
