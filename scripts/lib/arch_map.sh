@@ -9,8 +9,8 @@ map_arch_name() {
     case "$input_arch" in
         # Direct mappings (already canonical)
         arm32v5le|arm32v5lehf|arm32v7le|arm32v7lehf|armeb|armv6|armv7m|armv7r|\
-        mips32v2le|mips32v2be|mipsn32|mipsn32el|mips64|mips64le|mips64n32|mips64n32el|\
-        ppc32be|powerpcle|powerpc64|ppc64le|\
+        mips32v2le|mips32v2lesf|mips32v2be|mips32v2besf|mipsn32|mipsn32el|mips64|mips64le|mips64n32|mips64n32el|\
+        ppc32be|ppc32besf|powerpcle|powerpclesf|powerpc64|ppc64le|\
         i486|ix86le|x86_64|aarch64|aarch64_be|\
         sh2|sh2eb|sh4|sh4eb|\
         microblaze|microblazeel|or1k|m68k|s390x|\

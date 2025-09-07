@@ -140,16 +140,16 @@ arch=$(uname -m);libc=$(ldd --version 2>&1|grep -qi musl&&echo musl||echo glibc)
 
 ## Supported Architectures
 
-35 architectures are supported (musl static builds):
+39 architectures are supported (musl static builds):
 24 architectures are supported (glibc builds):
 
 **ARM**: `aarch64`, `aarch64_be`, `arm32v5le`, `arm32v5lehf`, `arm32v7le`, `arm32v7lehf`, `armeb`, `armv6`, `armv7m`, `armv7r`
 
 **x86**: `x86_64`, `i486`, `ix86le`
 
-**MIPS**: `mips32v2be`, `mips32v2le`, `mips64`, `mips64le`, `mips64n32`, `mips64n32el`, `mipsn32`, `mipsn32el`
+**MIPS**: `mips32v2be`, `mips32v2le`, `mips32v2besf`, `mips32v2lesf`, `mips64`, `mips64le`, `mips64n32`, `mips64n32el`, `mipsn32`, `mipsn32el`
 
-**PowerPC**: `ppc32be`, `ppc64le`, `powerpc64`, `powerpcle`
+**PowerPC**: `ppc32be`, `ppc32besf`, `ppc64le`, `powerpc64`, `powerpcle`, `powerpclesf`
 
 **RISC-V**: `riscv32`, `riscv64`
 
@@ -176,6 +176,43 @@ Common issues include:
 - Incompatible assembly code or architecture-specific optimizations
 - Build system attempting to run target binaries during compilation
 - Missing or incompatible system headers for the target architecture
+
+### Troubleshooting: Illegal Instruction Errors
+
+If you encounter an "Illegal instruction" error when running a binary on your target system, this is often due to incompatible CPU instruction sets or floating-point ABI mismatches. 
+
+**Quick architecture detection on target system:**
+```bash
+# Show architecture and floating-point ABI
+uname -m; strings /bin/busybox | grep -E "ld-musl|ld-linux" | head -1
+
+# Examples of output:
+# mipsel
+# /lib/ld-musl-mipsel-sf.so.1  → MIPS little-endian, soft-float (use mips32v2le)
+# armv7l  
+# /lib/ld-linux-armhf.so.3     → ARM v7, hard-float (use arm32v7lehf)
+```
+
+The `custom` tool is useful for testing compatibility:
+
+```bash
+# Test if binaries work on your target
+./output/<arch>/custom
+```
+
+If `custom` shows its ASCII art banner, other binaries for that architecture should work. If it crashes with "Illegal instruction", you may have:
+
+1. **MIPS Release mismatch**: MIPS32v2le binaries use MIPS32r1 + soft-float for maximum compatibility. Older MIPS32r1-only systems should work.
+
+2. **Floating-point ABI mismatch**: 
+   - Architectures with "sf" suffix (mips32v2besf, mips32v2lesf, ppc32besf, powerpclesf) explicitly use soft-float
+   - Architectures without "hf" suffix (arm32v5le, mips32v2le, mips32v2be, ppc32be, powerpcle) also use soft-float
+   - Architectures with "hf" suffix (arm32v5lehf, arm32v7lehf) use hard-float
+   - Make sure to use the correct variant for your system
+
+3. **CPU instruction set too new**: Some architectures target newer CPU variants (e.g., i686 instead of i486, ARMv7 instead of ARMv5).
+
+**Solution**: If you need different CPU flags for your specific hardware, you can modify `scripts/lib/build_flags.sh` to adjust the compiler flags for your architecture, then rebuild the affected tools.
 
 ## Build Options
 
@@ -206,6 +243,19 @@ OPTIONS:
 - Docker
 - 20GB+ free disk space (for toolchains, sources, and build artifacts)
 - Internet connection (for downloading sources/toolchains)
+
+## Rebuilding Docker Images
+
+If you encounter toolchain errors or need to add new architectures:
+
+```bash
+# Rebuild musl-based builder (main build system)
+# Note: The dot (.) at the end is the build context - required!
+docker build --no-cache -t sthenos-musl-builder -f Dockerfile.musl .
+
+# Rebuild glibc-based builder (for ltrace and preload libraries)  
+docker build --no-cache -t sthenos-glibc-builder -f Dockerfile.glibc .
+```
 
 ## Output
 

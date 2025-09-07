@@ -62,6 +62,14 @@ setup_cross_env() {
             export CFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard"
             export LDFLAGS=""
             ;;
+        mips32v2besf|mips32v2lesf)
+            export CFLAGS="-msoft-float"
+            export LDFLAGS="-msoft-float"
+            ;;
+        ppc32besf|powerpclesf)
+            export CFLAGS="-msoft-float"
+            export LDFLAGS="-msoft-float"
+            ;;
         *)
             export CFLAGS=""
             export LDFLAGS=""

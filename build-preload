@@ -87,6 +87,7 @@ ARCHITECTURES:
   x86_64 aarch64 arm32v7le i486 mips64le ppc64le riscv64 s390x
   aarch64be mips64 armv5 armv6 ppc32 sparc64 sh4 mips32 mips32el
   riscv32 microblazeel microblazebe nios2 openrisc arcle xtensa m68k
+  mips32v2besf mips32v2lesf ppc32besf powerpclesf (soft-float variants)
 
 EXAMPLES:
   $0                              # Build all libraries for all architectures

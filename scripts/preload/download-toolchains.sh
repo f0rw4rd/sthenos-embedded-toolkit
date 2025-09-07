@@ -29,6 +29,10 @@ declare -A TOOLCHAIN_URLS=(
     ["openrisc"]="https://toolchains.bootlin.com/downloads/releases/toolchains/openrisc/tarballs/openrisc--glibc--stable-2024.02-1.tar.bz2"
     ["arcle"]="https://toolchains.bootlin.com/downloads/releases/toolchains/arcle-hs38/tarballs/arcle-hs38--glibc--stable-2024.02-1.tar.bz2"
     ["m68k"]="https://toolchains.bootlin.com/downloads/releases/toolchains/m68k-68xxx/tarballs/m68k-68xxx--glibc--stable-2024.02-1.tar.bz2"
+    ["mips32v2besf"]="https://toolchains.bootlin.com/downloads/releases/toolchains/mips32-sf/tarballs/mips32-sf--glibc--stable-2024.02-1.tar.bz2"
+    ["mips32v2lesf"]="https://toolchains.bootlin.com/downloads/releases/toolchains/mips32el-sf/tarballs/mips32el-sf--glibc--stable-2024.02-1.tar.bz2"
+    ["ppc32besf"]="https://toolchains.bootlin.com/downloads/releases/toolchains/powerpc-sf/tarballs/powerpc-sf--glibc--stable-2024.02-1.tar.bz2"
+    ["powerpclesf"]="https://toolchains.bootlin.com/downloads/releases/toolchains/powerpcle-sf/tarballs/powerpcle-sf--glibc--stable-2024.02-1.tar.bz2"
 )
 
 download_toolchain() {
@@ -78,6 +82,10 @@ download_toolchain() {
         openrisc)   target_dir="$toolchain_dir/openrisc-unknown-linux-gnu" ;;
         arcle)      target_dir="$toolchain_dir/arcle-unknown-linux-gnu" ;;
         m68k)       target_dir="$toolchain_dir/m68k-unknown-linux-gnu" ;;
+        mips32v2besf) target_dir="$toolchain_dir/mips32-sf-unknown-linux-gnu" ;;
+        mips32v2lesf) target_dir="$toolchain_dir/mips32el-sf-unknown-linux-gnu" ;;
+        ppc32besf)  target_dir="$toolchain_dir/powerpc-sf-unknown-linux-gnu" ;;
+        powerpclesf) target_dir="$toolchain_dir/powerpcle-sf-unknown-linux-gnu" ;;
     esac
     
     if [ -d "$target_dir/bin" ]; then

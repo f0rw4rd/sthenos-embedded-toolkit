@@ -12,6 +12,7 @@ if [[ "$SCRIPT_DIR" == */lib ]]; then
 fi
 
 source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/toolchain.sh"
 
 # Global variables for tls-preloader source
 TLS_PRELOADER_REPO="https://github.com/f0rw4rd/tls-preloader.git"
@@ -61,25 +62,33 @@ build_tls_noverify() {
     
     log "Building tls-noverify for $arch..."
     
-    # Get toolchain info for glibc build
-    local toolchain_dir="/build/toolchains-preload/$arch"
-    if [ ! -d "$toolchain_dir" ]; then
+    # Ensure toolchain exists
+    ensure_toolchain "$arch" || {
         log_error "Toolchain not available for $arch"
         return 1
-    fi
+    }
+    
+    # Get toolchain directory and prefix
+    local toolchain_dir=$(get_toolchain_dir "$arch")
+    local prefix=$(get_toolchain_prefix "$arch")
     
     # Find the actual gcc compiler
-    local CC=$(find "${toolchain_dir}/bin" -name "*-gcc" -type f -executable | grep -v ".br_real" | head -1)
-    local STRIP=$(find "${toolchain_dir}/bin" -name "*-strip" -type f -executable | head -1)
-    
-    if [ -z "$CC" ] || [ ! -x "$CC" ]; then
-        log_error "No gcc found in ${toolchain_dir}/bin"
-        return 1
+    local CC="${toolchain_dir}/bin/${prefix}-gcc"
+    if [ ! -x "$CC" ]; then
+        CC=$(find "${toolchain_dir}/bin" -name "*-gcc" -type f -executable | grep -v ".br_real" | head -1)
+        if [ -z "$CC" ] || [ ! -x "$CC" ]; then
+            log_error "No gcc found in ${toolchain_dir}/bin"
+            return 1
+        fi
     fi
     
-    if [ -z "$STRIP" ] || [ ! -x "$STRIP" ]; then
-        log "Warning: strip not found, binary will not be stripped"
-        STRIP="true"  # Use 'true' as a no-op
+    local STRIP="${toolchain_dir}/bin/${prefix}-strip"
+    if [ ! -x "$STRIP" ]; then
+        STRIP=$(find "${toolchain_dir}/bin" -name "*-strip" -type f -executable | head -1)
+        if [ -z "$STRIP" ] || [ ! -x "$STRIP" ]; then
+            log "Warning: strip not found, binary will not be stripped"
+            STRIP="true"  # Use 'true' as a no-op
+        fi
     fi
     
     # Save current directory

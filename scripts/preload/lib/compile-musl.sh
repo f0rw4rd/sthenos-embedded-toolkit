@@ -189,6 +189,16 @@ get_musl_toolchain_prefix() {
         sh2eb)       echo "sh2eb-linux-musl" ;;
         sh4)         echo "sh4-linux-musl" ;;
         sh4eb)       echo "sh4eb-linux-musl" ;;
+        # Soft-float variants
+        mips32v2besf) echo "mips-linux-muslsf" ;;
+        mips32v2lesf) echo "mipsel-linux-muslsf" ;;
+        ppc32besf)   echo "powerpc-linux-muslsf" ;;
+        powerpclesf) echo "powerpcle-linux-muslsf" ;;
+        # MIPS N32 variants
+        mipsn32)     echo "mipsn32-linux-musl" ;;
+        mipsn32el)   echo "mipsn32el-linux-musl" ;;
+        mips64n32)   echo "mips64n32-linux-musl" ;;
+        mips64n32el) echo "mips64n32el-linux-musl" ;;
         *)           echo "" ;;
     esac
 }

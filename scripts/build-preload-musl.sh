@@ -27,10 +27,10 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         arm32v5le|arm32v5lehf|arm32v7le|arm32v7lehf|armeb|armv6|armv7m|armv7r|\
-        aarch64|aarch64_be|\
+        aarch64|aarch64_be|aarch64be|\
         i486|ix86le|x86_64|\
-        mips32v2le|mips32v2be|mipsn32|mipsn32el|mips64|mips64le|mips64n32|mips64n32el|\
-        ppc32be|powerpcle|powerpc64|ppc64le|\
+        mips32v2le|mips32v2lesf|mips32v2be|mips32v2besf|mipsn32|mipsn32el|mips64|mips64le|mips64n32|mips64n32el|\
+        ppc32be|ppc32besf|powerpcle|powerpclesf|powerpc64|ppc64le|\
         sh2|sh2eb|sh4|sh4eb|\
         microblaze|microblazeel|or1k|m68k|s390x|\
         riscv32|riscv64)
@@ -54,7 +54,7 @@ fi
 if [ "$ARCHS_TO_BUILD" = "all" ]; then
     # Use the same architectures as glibc for consistency
     # Use canonical musl architecture names from main build system
-    ARCHS_TO_BUILD="arm32v5le arm32v5lehf arm32v7le arm32v7lehf armeb armv6 armv7m armv7r aarch64 aarch64_be i486 ix86le x86_64 mips32v2le mips32v2be mipsn32 mipsn32el mips64 mips64le mips64n32 mips64n32el ppc32be powerpcle powerpc64 ppc64le sh2 sh2eb sh4 sh4eb microblaze microblazeel or1k m68k s390x riscv32 riscv64"
+    ARCHS_TO_BUILD="arm32v5le arm32v5lehf arm32v7le arm32v7lehf armeb armv6 armv7m armv7r aarch64 aarch64_be i486 ix86le x86_64 mips32v2le mips32v2lesf mips32v2be mips32v2besf mipsn32 mipsn32el mips64 mips64le mips64n32 mips64n32el ppc32be ppc32besf powerpcle powerpclesf powerpc64 ppc64le sh2 sh2eb sh4 sh4eb microblaze microblazeel or1k m68k s390x riscv32 riscv64"
 fi
 
 build_preload_musl() {

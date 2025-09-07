@@ -89,8 +89,8 @@ ALL_ARCHS=(
     arm32v5le arm32v5lehf arm32v7le arm32v7lehf armeb armv6 armv7m armv7r
     aarch64 aarch64_be
     i486 ix86le x86_64
-    mips32v2le mips32v2be mipsn32 mipsn32el mips64 mips64le mips64n32 mips64n32el
-    ppc32be powerpcle powerpc64 ppc64le
+    mips32v2le mips32v2lesf mips32v2be mips32v2besf mipsn32 mipsn32el mips64 mips64le mips64n32 mips64n32el
+    ppc32be ppc32besf powerpcle powerpclesf powerpc64 ppc64le
     sh2 sh2eb sh4 sh4eb
     microblaze microblazeel or1k m68k s390x
     riscv32 riscv64
@@ -177,7 +177,14 @@ for tool in "${TOOLS_TO_BUILD[@]}"; do
     done
     
     for arch in "${ARCHS_TO_BUILD[@]}"; do
-        if [ -f "/build/output/$arch/$tool" ]; then
+        # Special case for shell-static which creates a directory of tools
+        if [ "$tool" = "shell-static" ]; then
+            if [ -d "/build/output/$arch/shell" ] && [ -n "$(ls -A /build/output/$arch/shell 2>/dev/null)" ]; then
+                COMPLETED=$((COMPLETED + 1))
+            else
+                FAILED=$((FAILED + 1))
+            fi
+        elif [ -f "/build/output/$arch/$tool" ]; then
             COMPLETED=$((COMPLETED + 1))
         else
             FAILED=$((FAILED + 1))
@@ -193,7 +200,11 @@ BUILD_SECS=$((BUILD_TIME % 60))
 
 log_info "Total builds: $TOTAL_BUILDS"
 log_info "Completed: $COMPLETED"
-log_error "Failed: $FAILED"
+if [ $FAILED -gt 0 ]; then
+    log_error "Failed: $FAILED"
+else
+    log_info "Failed: $FAILED"
+fi
 log_info "Build time: ${BUILD_MINS}m ${BUILD_SECS}s"
 echo
 

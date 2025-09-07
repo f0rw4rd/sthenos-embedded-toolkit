@@ -95,13 +95,12 @@ build_shell_static() {
     return 0
 }
 
-# Entry point
-main() {
-    local arch="$1"
-    build_shell_static "$arch"
-}
-
-# Run if executed directly
+# Entry point - called with just architecture
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    main "$@"
+    arch="$1"
+    if [ -z "$arch" ]; then
+        log_error "Usage: $0 <architecture>"
+        exit 1
+    fi
+    build_shell_static "$arch"
 fi

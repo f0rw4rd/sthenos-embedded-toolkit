@@ -5,17 +5,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/build_helpers.sh"
 
 download_toolchain() {
     local arch=$1
-    local toolchain_dir="/build/toolchains/$arch"
     
-    if [ -d "$toolchain_dir/bin" ]; then
-        return 0
-    fi
+    # This function is called to ensure toolchain exists
+    # It's a no-op since toolchains are pre-downloaded in Docker image
+    # The actual check happens in setup_arch
     
-    log_error "Toolchain not found for $arch"
-    echo "Expected toolchain directory: $toolchain_dir"
-    echo "Toolchains should be pre-downloaded during Docker image build"
-    echo "Please rebuild the Docker image with: docker build -t sthenos-toolkit ."
-    return 1
+    return 0
 }
 
 setup_arch() {
@@ -52,15 +47,33 @@ setup_arch() {
             CFLAGS_ARCH=""
             CONFIG_ARCH="mips"
             ;;
+        mips32v2lesf)
+            CROSS_COMPILE="mipsel-linux-muslsf-"
+            HOST="mipsel-linux-muslsf"
+            CFLAGS_ARCH=""
+            CONFIG_ARCH="mips"
+            ;;
         mips32v2be)
             CROSS_COMPILE="mips-linux-musl-"
             HOST="mips-linux-musl"
             CFLAGS_ARCH=""
             CONFIG_ARCH="mips"
             ;;
+        mips32v2besf)
+            CROSS_COMPILE="mips-linux-muslsf-"
+            HOST="mips-linux-muslsf"
+            CFLAGS_ARCH=""
+            CONFIG_ARCH="mips"
+            ;;
         ppc32be)
             CROSS_COMPILE="powerpc-linux-musl-"
             HOST="powerpc-linux-musl"
+            CFLAGS_ARCH=""
+            CONFIG_ARCH="powerpc"
+            ;;
+        ppc32besf)
+            CROSS_COMPILE="powerpc-linux-muslsf-"
+            HOST="powerpc-linux-muslsf"
             CFLAGS_ARCH=""
             CONFIG_ARCH="powerpc"
             ;;
@@ -157,6 +170,12 @@ setup_arch() {
             CFLAGS_ARCH=""
             CONFIG_ARCH="powerpc"
             ;;
+        powerpclesf)
+            CROSS_COMPILE="powerpcle-linux-muslsf-"
+            HOST="powerpcle-linux-muslsf"
+            CFLAGS_ARCH=""
+            CONFIG_ARCH="powerpc"
+            ;;
         microblaze)
             CROSS_COMPILE="microblaze-linux-musl-"
             HOST="microblaze-linux-musl"
@@ -247,14 +266,22 @@ setup_arch() {
             ;;
     esac
     
-    local toolchain_dir="$arch"
+    # Derive toolchain directory from CROSS_COMPILE (remove trailing dash and add -cross)
+    local toolchain_dir="${CROSS_COMPILE%-}"
+    toolchain_dir="${toolchain_dir}-cross"
     
     if [ ! -d "/build/toolchains/$toolchain_dir/bin" ]; then
-        echo "Toolchain for $arch not found, downloading..."
+        echo "Toolchain for $arch not found at /build/toolchains/$toolchain_dir"
+        echo "Attempting to download..."
         download_toolchain "$arch" || {
-            log_error "Failed to download toolchain for $arch"
+            log_error "Failed to setup toolchain for $arch"
             return 1
         }
+        # After download, check again
+        if [ ! -d "/build/toolchains/$toolchain_dir/bin" ]; then
+            log_error "Toolchain directory still not found after download: /build/toolchains/$toolchain_dir"
+            return 1
+        fi
     fi
     
     if [[ ":$PATH:" != *":/build/toolchains/$toolchain_dir/bin:"* ]]; then

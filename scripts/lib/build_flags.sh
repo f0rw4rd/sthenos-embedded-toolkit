@@ -82,11 +82,19 @@ get_compile_flags() {
             ;;
             
         mips32v2le)
-            base_flags="$base_flags -march=mips32r2 -mtune=24kc -mabi=32"
+            base_flags="$base_flags -march=mips32r2 -mabi=32"
+            base_flags="$base_flags -mno-shared -mno-plt"
+            ;;
+        mips32v2lesf)
+            base_flags="$base_flags -march=mips32 -msoft-float -mabi=32"
             base_flags="$base_flags -mno-shared -mno-plt"
             ;;
         mips32v2be)
-            base_flags="$base_flags -march=mips32r2 -mtune=24kc -mabi=32"
+            base_flags="$base_flags -march=mips32r2 -mabi=32"
+            base_flags="$base_flags -EB -mno-shared -mno-plt"
+            ;;
+        mips32v2besf)
+            base_flags="$base_flags -march=mips32 -msoft-float -mabi=32"
             base_flags="$base_flags -EB -mno-shared -mno-plt"
             ;;
         mips64le)
@@ -102,6 +110,10 @@ get_compile_flags() {
             base_flags="$base_flags -mcpu=powerpc -mtune=powerpc"
             base_flags="$base_flags -mhard-float -msecure-plt"
             ;;
+        ppc32besf)
+            base_flags="$base_flags -mcpu=powerpc -mtune=powerpc"
+            base_flags="$base_flags -msoft-float -msecure-plt"
+            ;;
         ppc64le)
             base_flags="$base_flags -mcpu=power8 -mtune=power8"
             base_flags="$base_flags -mhard-float"
@@ -113,6 +125,10 @@ get_compile_flags() {
         powerpcle)
             base_flags="$base_flags -mcpu=powerpc -mtune=powerpc"
             base_flags="$base_flags -mlittle-endian -mhard-float"
+            ;;
+        powerpclesf)
+            base_flags="$base_flags -mcpu=powerpc -mtune=powerpc"
+            base_flags="$base_flags -mlittle-endian -msoft-float"
             ;;
             
         m68k)

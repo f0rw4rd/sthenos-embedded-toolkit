@@ -26,7 +26,7 @@ get_desock_arch() {
         arm*)       echo "arm" ;;
         i486)       echo "i386" ;;
         mips64*)    echo "mips64" ;;
-        mips32*)    echo "mips" ;;
+        mips32*|mips32v2*) echo "mips" ;;
         mipsn32*)   echo "mipsn32" ;;
         ppc64le)    echo "powerpc64" ;;
         ppc32*|powerpc*) echo "powerpc" ;;
@@ -193,9 +193,18 @@ build_libdesock_musl() {
     case "$arch" in
         x86_64)      prefix="x86_64-linux-musl" ;;
         aarch64)     prefix="aarch64-linux-musl" ;;
-        aarch64be)   prefix="aarch64_be-linux-musl" ;;
+        aarch64be|aarch64_be) prefix="aarch64_be-linux-musl" ;;
         arm32v7le)   prefix="armv7l-linux-musleabihf" ;;
         i486)        prefix="i486-linux-musl" ;;
+        ix86le)      prefix="i686-linux-musl" ;;
+        mips32v2le)  prefix="mipsel-linux-musl" ;;
+        mips32v2be)  prefix="mips-linux-musl" ;;
+        mips32v2lesf) prefix="mipsel-linux-muslsf" ;;
+        mips32v2besf) prefix="mips-linux-muslsf" ;;
+        ppc32be)     prefix="powerpc-linux-musl" ;;
+        ppc32besf)   prefix="powerpc-linux-muslsf" ;;
+        powerpcle)   prefix="powerpcle-linux-musl" ;;
+        powerpclesf) prefix="powerpcle-linux-muslsf" ;;
         mips64le)    prefix="mips64el-linux-musl" ;;
         ppc64le)     prefix="powerpc64le-linux-musl" ;;
         riscv64)     prefix="riscv64-linux-musl" ;;
@@ -203,7 +212,6 @@ build_libdesock_musl() {
         mips64)      prefix="mips64-linux-musl" ;;
         armv5)       prefix="arm-linux-musleabi" ;;
         armv6)       prefix="armv6-linux-musleabihf" ;;
-        ppc32)       prefix="powerpc-linux-musl" ;;
         sparc64)     prefix="sparc64-linux-musl" ;;
         sh4)         prefix="sh4-linux-musl" ;;
         mips32)      prefix="mips-linux-musl" ;;

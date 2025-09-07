@@ -67,8 +67,8 @@ build_custom_impl() {
     # Clean previous builds
     make clean || true
     
-    # Build with parallel make
-    parallel_make
+    # make it in parallel 
+    make -j$(nproc 2>/dev/null || echo 4) || make  
 }
 
 install_custom() {

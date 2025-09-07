@@ -67,9 +67,11 @@ map_arch_to_musl() {
 }
 
 setup_arch_glibc() {
-    local arch="$1"
+    local canonical_arch="$1"
+    local arch="$canonical_arch"
     
-    case "$arch" in
+    # Map canonical names to glibc/Bootlin names for toolchain lookup
+    case "$canonical_arch" in
         arm32v5le)   arch="armv5" ;;
         arm32v7le)   arch="arm32v7le" ;;
         ppc32be)     arch="ppc32" ;;
@@ -163,18 +165,18 @@ setup_arch_glibc() {
 
 build_glibc_tool() {
     local tool="$1"
-    local arch="$2"
+    local canonical_arch="$2"  # Use canonical architecture name throughout
     
-    local musl_arch=$(map_arch_to_musl "$arch")
+    local musl_arch=$(map_arch_to_musl "$canonical_arch")
     
     local arch_output="${OUTPUT_DIR}/${musl_arch}"
     mkdir -p "$arch_output"
     
-    if ! setup_arch_glibc "$arch"; then
+    if ! setup_arch_glibc "$canonical_arch"; then
         return 1
     fi
     
-    export DEPS_PREFIX="${DEPS_PREFIX}/${arch}"
+    export DEPS_PREFIX="${DEPS_PREFIX}/${canonical_arch}"
     mkdir -p "${DEPS_PREFIX}/lib" "${DEPS_PREFIX}/include"
     
     local build_script="${GLIBC_SCRIPT_DIR}/tools/build-${tool}.sh"
@@ -185,7 +187,7 @@ build_glibc_tool() {
     
     source "$build_script"
     
-    if main "$arch"; then
+    if main "$canonical_arch"; then
         return 0
     else
         return 1

@@ -11,18 +11,22 @@ cd "$TOOLCHAIN_DIR"
 
 verify_toolchain() {
     local target_dir=$1
-    local min_headers=1000
     
     # Check if directory exists
     if [ ! -d "$target_dir" ]; then
         return 1
     fi
     
-    # Count header files
-    local header_count=$(find "$target_dir" -name "*.h" 2>/dev/null | wc -l)
+    # Check if bin directory exists with gcc compiler
+    if [ ! -d "$target_dir/bin" ]; then
+        echo "  Warning: bin directory missing"
+        return 1
+    fi
     
-    if [ $header_count -lt $min_headers ]; then
-        echo "  Warning: Only $header_count headers found (expected >$min_headers)"
+    # Check for GCC compiler (less strict verification)
+    local gcc_count=$(ls "$target_dir/bin/"*-gcc 2>/dev/null | wc -l)
+    if [ $gcc_count -eq 0 ]; then
+        echo "  Warning: GCC compiler not found"
         return 1
     fi
     
@@ -70,11 +74,8 @@ download_toolchain() {
     fi
     
     if tar xzf "$filename"; then
-        local extracted_dir="${filename%.tgz}"
-        extracted_dir="${extracted_dir%-cross}"
-        if [ -d "$extracted_dir" ]; then
-            mv "$extracted_dir" "$target_dir"
-        fi
+        # The extracted directory should match target_dir
+        # (since we're using the actual toolchain names now)
         rm -f "$filename"
         
         # Verify the extracted toolchain
@@ -97,41 +98,45 @@ export -f download_toolchain
 export -f log_error
 
 declare -a TOOLCHAINS=(
-    "https://musl.cc/arm-linux-musleabi-cross.tgz arm32v5le"
-    "https://musl.cc/arm-linux-musleabihf-cross.tgz arm32v5lehf"
-    "https://musl.cc/armv7l-linux-musleabihf-cross.tgz arm32v7le"
-    "https://musl.cc/armeb-linux-musleabi-cross.tgz armeb"
-    "https://musl.cc/armv6-linux-musleabihf-cross.tgz armv6"
-    "https://musl.cc/armv7m-linux-musleabi-cross.tgz armv7m"
-    "https://musl.cc/armv7r-linux-musleabihf-cross.tgz armv7r"
-    "https://musl.cc/aarch64-linux-musl-cross.tgz aarch64"
-    "https://musl.cc/i686-linux-musl-cross.tgz ix86le"
-    "https://musl.cc/x86_64-linux-musl-cross.tgz x86_64"
-    "https://musl.cc/i486-linux-musl-cross.tgz i486"
-    "https://musl.cc/mipsel-linux-musl-cross.tgz mips32v2le"
-    "https://musl.cc/mips-linux-musl-cross.tgz mips32v2be"
-    "https://musl.cc/mips-linux-musln32sf-cross.tgz mipsn32"
-    "https://musl.cc/mipsel-linux-musln32sf-cross.tgz mipsn32el"
-    "https://musl.cc/mips64el-linux-musl-cross.tgz mips64le"
-    "https://musl.cc/mips64-linux-musln32-cross.tgz mips64n32"
-    "https://musl.cc/mips64el-linux-musln32-cross.tgz mips64n32el"
-    "https://musl.cc/powerpc-linux-musl-cross.tgz ppc32be"
-    "https://musl.cc/powerpcle-linux-musl-cross.tgz powerpcle"
-    "https://musl.cc/powerpc64-linux-musl-cross.tgz powerpc64"
-    "https://musl.cc/powerpc64le-linux-musl-cross.tgz ppc64le"
-    "https://musl.cc/sh2-linux-musl-cross.tgz sh2"
-    "https://musl.cc/sh2eb-linux-musl-cross.tgz sh2eb"
-    "https://musl.cc/sh4-linux-musl-cross.tgz sh4"
-    "https://musl.cc/sh4eb-linux-musl-cross.tgz sh4eb"
-    "https://musl.cc/microblaze-linux-musl-cross.tgz microblaze"
-    "https://musl.cc/microblazeel-linux-musl-cross.tgz microblazeel"
-    "https://musl.cc/or1k-linux-musl-cross.tgz or1k"
-    "https://musl.cc/m68k-linux-musl-cross.tgz m68k"
-    "https://musl.cc/s390x-linux-musl-cross.tgz s390x"
-    "https://musl.cc/riscv32-linux-musl-cross.tgz riscv32"
-    "https://musl.cc/riscv64-linux-musl-cross.tgz riscv64"
-    "https://musl.cc/aarch64_be-linux-musl-cross.tgz aarch64_be"
-    "https://musl.cc/mips64-linux-musl-cross.tgz mips64"
+    "https://musl.cc/arm-linux-musleabi-cross.tgz arm-linux-musleabi-cross"
+    "https://musl.cc/arm-linux-musleabihf-cross.tgz arm-linux-musleabihf-cross"
+    "https://musl.cc/armv7l-linux-musleabihf-cross.tgz armv7l-linux-musleabihf-cross"
+    "https://musl.cc/armeb-linux-musleabi-cross.tgz armeb-linux-musleabi-cross"
+    "https://musl.cc/armv6-linux-musleabihf-cross.tgz armv6-linux-musleabihf-cross"
+    "https://musl.cc/armv7m-linux-musleabi-cross.tgz armv7m-linux-musleabi-cross"
+    "https://musl.cc/armv7r-linux-musleabihf-cross.tgz armv7r-linux-musleabihf-cross"
+    "https://musl.cc/aarch64-linux-musl-cross.tgz aarch64-linux-musl-cross"
+    "https://musl.cc/i686-linux-musl-cross.tgz i686-linux-musl-cross"
+    "https://musl.cc/x86_64-linux-musl-cross.tgz x86_64-linux-musl-cross"
+    "https://musl.cc/i486-linux-musl-cross.tgz i486-linux-musl-cross"
+    "https://musl.cc/mipsel-linux-musl-cross.tgz mipsel-linux-musl-cross"
+    "https://musl.cc/mipsel-linux-muslsf-cross.tgz mipsel-linux-muslsf-cross"
+    "https://musl.cc/mips-linux-musl-cross.tgz mips-linux-musl-cross"
+    "https://musl.cc/mips-linux-muslsf-cross.tgz mips-linux-muslsf-cross"
+    "https://musl.cc/mips-linux-musln32sf-cross.tgz mips-linux-musln32sf-cross"
+    "https://musl.cc/mipsel-linux-musln32sf-cross.tgz mipsel-linux-musln32sf-cross"
+    "https://musl.cc/mips64el-linux-musl-cross.tgz mips64el-linux-musl-cross"
+    "https://musl.cc/mips64-linux-musln32-cross.tgz mips64-linux-musln32-cross"
+    "https://musl.cc/mips64el-linux-musln32-cross.tgz mips64el-linux-musln32-cross"
+    "https://musl.cc/powerpc-linux-musl-cross.tgz powerpc-linux-musl-cross"
+    "https://musl.cc/powerpc-linux-muslsf-cross.tgz powerpc-linux-muslsf-cross"
+    "https://musl.cc/powerpcle-linux-musl-cross.tgz powerpcle-linux-musl-cross"
+    "https://musl.cc/powerpcle-linux-muslsf-cross.tgz powerpcle-linux-muslsf-cross"
+    "https://musl.cc/powerpc64-linux-musl-cross.tgz powerpc64-linux-musl-cross"
+    "https://musl.cc/powerpc64le-linux-musl-cross.tgz powerpc64le-linux-musl-cross"
+    "https://musl.cc/sh2-linux-musl-cross.tgz sh2-linux-musl-cross"
+    "https://musl.cc/sh2eb-linux-musl-cross.tgz sh2eb-linux-musl-cross"
+    "https://musl.cc/sh4-linux-musl-cross.tgz sh4-linux-musl-cross"
+    "https://musl.cc/sh4eb-linux-musl-cross.tgz sh4eb-linux-musl-cross"
+    "https://musl.cc/microblaze-linux-musl-cross.tgz microblaze-linux-musl-cross"
+    "https://musl.cc/microblazeel-linux-musl-cross.tgz microblazeel-linux-musl-cross"
+    "https://musl.cc/or1k-linux-musl-cross.tgz or1k-linux-musl-cross"
+    "https://musl.cc/m68k-linux-musl-cross.tgz m68k-linux-musl-cross"
+    "https://musl.cc/s390x-linux-musl-cross.tgz s390x-linux-musl-cross"
+    "https://musl.cc/riscv32-linux-musl-cross.tgz riscv32-linux-musl-cross"
+    "https://musl.cc/riscv64-linux-musl-cross.tgz riscv64-linux-musl-cross"
+    "https://musl.cc/aarch64_be-linux-musl-cross.tgz aarch64_be-linux-musl-cross"
+    "https://musl.cc/mips64-linux-musl-cross.tgz mips64-linux-musl-cross"
 )
 
 echo "Downloading ${#TOOLCHAINS[@]} toolchains in parallel..."

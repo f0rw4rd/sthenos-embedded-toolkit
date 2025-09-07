@@ -2,13 +2,14 @@
 set -euo pipefail
 
 echo "Downloading All Glibc Toolchains"
-echo "This will download all 24 glibc toolchains"
+echo "This will download all 28 glibc toolchains"
 echo "Build timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
 echo
 
 ARCHITECTURES="x86_64 aarch64 arm32v7le i486 mips64le ppc64le riscv64 s390x \
                aarch64be mips64 armv5 armv6 ppc32 sparc64 sh4 mips32 mips32el \
-               riscv32 microblazeel microblazebe nios2 openrisc arcle m68k"
+               riscv32 microblazeel microblazebe nios2 openrisc arcle m68k \
+               mips32v2besf mips32v2lesf ppc32besf powerpclesf"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -40,7 +41,7 @@ for arch in $ARCHITECTURES; do
     done
     
     JOB_COUNT=$((JOB_COUNT + 1))
-    log_tool "$JOB_COUNT/24" "Starting download for $arch..."
+    log_tool "$JOB_COUNT/28" "Starting download for $arch..."
     download_with_tracking "$arch" &
 done
 
