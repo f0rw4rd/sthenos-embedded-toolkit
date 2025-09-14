@@ -1,9 +1,189 @@
 #!/bin/bash
-# Main build script for Stheno Embedded Toolkit (Alpine version)
+# Main build script for Sthenos Embedded Toolkit (Alpine version)
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$PROJECT_ROOT"
+
+# Source supported architectures and tools lists
+source "$PROJECT_ROOT/scripts/lib/supported.sh"
+# Note: supported.sh already sources common.sh with proper SCRIPT_DIR
+
+# Function to check missing binaries
+check_missing() {
+    local arch_filter="${1:-}"
+    
+    echo "Checking for missing binaries..."
+    echo "================================"
+    
+    # Use expected.txt if it exists, otherwise generate from x86_64
+    local expected_file="expected.txt"
+    if [ ! -f "$expected_file" ]; then
+        echo "Generating expected binaries list from x86_64..."
+        if [ -d "output/x86_64" ]; then
+            find output/x86_64 -type f -executable 2>/dev/null | sed 's|output/x86_64/||' | sort > "$expected_file"
+        else
+            echo "Error: No x86_64 output directory to generate expected list from"
+            echo "Build x86_64 first: ./build --arch x86_64"
+            return 1
+        fi
+    fi
+    
+    local total_expected=$(wc -l < "$expected_file")
+    
+    # Determine which architectures to check - only check existing output directories
+    local archs_to_check=()
+    if [ -n "$arch_filter" ]; then
+        # Check if specific arch directory exists
+        if [ -d "output/$arch_filter" ]; then
+            archs_to_check=("$arch_filter")
+        else
+            # Filter architectures based on pattern from existing directories
+            for arch_dir in output/*/; do
+                if [ -d "$arch_dir" ]; then
+                    arch=$(basename "$arch_dir")
+                    if [[ "$arch" == *"$arch_filter"* ]]; then
+                        archs_to_check+=("$arch")
+                    fi
+                fi
+            done
+        fi
+    else
+        # Get all architectures that have output directories
+        for arch_dir in output/*/; do
+            if [ -d "$arch_dir" ]; then
+                arch=$(basename "$arch_dir")
+                archs_to_check+=("$arch")
+            fi
+        done
+    fi
+    
+    # Sort architectures
+    if [ ${#archs_to_check[@]} -gt 0 ]; then
+        IFS=$'\n' archs_to_check=($(sort <<<"${archs_to_check[*]}"))
+        unset IFS
+    fi
+    
+    if [ ${#archs_to_check[@]} -eq 0 ]; then
+        echo "No output directories found"
+        if [ -n "$arch_filter" ]; then
+            echo "No architectures matching filter: $arch_filter"
+        fi
+        return 1
+    fi
+    
+    local overall_missing=0
+    local overall_existing=0
+    
+    # Check each architecture
+    for arch in "${archs_to_check[@]}"; do
+        local arch_missing=()
+        local arch_existing=()
+        
+        # Check each expected binary
+        while IFS= read -r binary; do
+            if [ -f "output/$arch/$binary" ]; then
+                arch_existing+=("$(basename "$binary")")
+            else
+                arch_missing+=("$(basename "$binary")")
+            fi
+        done < "$expected_file"
+        
+        local arch_existing_count=${#arch_existing[@]}
+        local arch_missing_count=${#arch_missing[@]}
+        overall_existing=$((overall_existing + arch_existing_count))
+        overall_missing=$((overall_missing + arch_missing_count))
+        
+        # Display results for this architecture
+        if [ $arch_missing_count -gt 0 ] || [ "$arch_filter" = "$arch" ]; then
+            echo ""
+            echo "$arch: $arch_existing_count/$total_expected built ($(( arch_existing_count * 100 / total_expected ))%)"
+            
+            if [ $arch_missing_count -gt 0 ]; then
+                echo "  Missing:"
+                # Group missing binaries by type
+                local missing_tools=()
+                local missing_can=()
+                local missing_shell=()
+                
+                for binary in "${arch_missing[@]}"; do
+                    case "$binary" in
+                        bcmserver|canbusload|can-calc-bit-timing|candump|canfdtest|cangen|canlogserver|canplayer|cansend|isotpdump|isotprecv|isotpsend|j1939*|mcp251xfd-dump|slcan*|testj1939)
+                            missing_can+=("$binary")
+                            ;;
+                        shell-bind|shell-env|shell-fifo|shell-helper|shell-loader|shell-reverse)
+                            missing_shell+=("$binary")
+                            ;;
+                        *)
+                            missing_tools+=("$binary")
+                            ;;
+                    esac
+                done
+                
+                if [ ${#missing_tools[@]} -gt 0 ]; then
+                    echo "    Tools: ${missing_tools[*]}"
+                fi
+                if [ ${#missing_can[@]} -gt 0 ]; then
+                    echo "    CAN utils: ${missing_can[*]}"
+                fi
+                if [ ${#missing_shell[@]} -gt 0 ]; then
+                    echo "    Shell: ${missing_shell[*]}"
+                fi
+            else
+                echo "  ✓ All binaries built!"
+            fi
+        fi
+    done
+    
+    # Summary
+    local total_binaries=$((overall_existing + overall_missing))
+    echo ""
+    echo "================================"
+    echo "Summary:"
+    echo "  Architectures checked: ${#archs_to_check[@]}"
+    echo "  Expected binaries per arch: $total_expected"
+    echo "  Total binaries checked: $total_binaries"
+    if [ $total_binaries -gt 0 ]; then
+        echo "  Built: $overall_existing ($(( overall_existing * 100 / total_binaries ))%)"
+        echo "  Missing: $overall_missing ($(( overall_missing * 100 / total_binaries ))%)"
+    fi
+    
+    if [ $overall_missing -eq 0 ]; then
+        echo ""
+        echo "✓ All binaries are built for selected architectures!"
+    else
+        echo ""
+        echo "To build missing binaries:"
+        if [ -n "$arch_filter" ]; then
+            echo "  ./build --arch $arch_filter"
+        else
+            echo "  ./build all"
+        fi
+    fi
+    
+    return 0
+}
+
+# Function to display ASCII banner
+show_banner() {
+    if [ -t 1 ]; then  # Only show banner if running in terminal
+        echo "            )           \\     /          ("
+        echo "          /|\\          ) \\___/ (         /|\\"
+        echo "        /  |  \\       ( /\\   /\\ )      /  |  \\"
+        echo "      /    |    \\      \\ \` | ' /     /    |    \\"
+        echo "+----/-----|-----O------\\  |  /----O------|------\\--------+"
+        echo "|                 '^'      V     '^'                      |"
+        echo "|               STHENOS EMBEDDED TOOLKIT                  |"
+        echo "|                  Static Binary Builder                  |"
+        echo "|            Cross-Compilation for All Architectures      |"
+        echo "+---------------------------------------------------------+"
+        echo "  l     /\\     /         \\\\             \\     /\\     l"
+        echo "  l  /     \\ /            ))              \\ /     \\  l"
+        echo "   I/       V            //                V       \\I"
+        echo "                         V"
+        echo ""
+    fi
+}
 
 # Default values
 TOOLS="all"
@@ -12,28 +192,151 @@ DEBUG=""
 DOWNLOAD_ONLY=false
 CLEAN=false
 INTERACTIVE=false
+CHECK_MISSING=false
+SHAREDLIB_MODE=false
+SHAREDLIB_NAME=""
+SHAREDLIB_LIBC="glibc"  # Default to glibc for shared libs
+BUILD_MODE=""  # Build mode for static builds (standard, embedded, minimal)
+FORCE_REBUILD=false
+
+# Unified function to run commands in Docker container with proper mounts
+run_in_container() {
+    local command="$1"
+    local interactive="${2:-false}"
+    local work_dir="${3:-/build}"
+    local extra_mounts="${4:-}"  # Additional mounts as a string
+    
+    # Determine TTY flags
+    local tty_flags=""
+    if [ "$interactive" = "true" ] || ([ -z "$command" ] && [ -t 0 ]); then
+        tty_flags="-it"
+    fi
+    
+    # Ensure output and logs directories exist with proper permissions
+    mkdir -p "${PWD}/output" "${PWD}/logs"
+    
+    # Only mount specific directories needed for builds
+    local mounts=(
+        "-v" "${PWD}/scripts:/build/scripts:ro"
+        "-v" "${PWD}/output:/build/output"
+        "-v" "${PWD}/logs:/build/logs"
+        "-v" "${PWD}/patches:/build/patches:ro"
+    )
+    
+    # Mount source files if they exist
+    if [ -d "${PWD}/shared-libs" ]; then
+        mounts+=("-v" "${PWD}/shared-libs:/build/shared-libs:ro")
+    fi
+    
+    # Mount example-custom-tool if it exists
+    if [ -d "${PWD}/example-custom-tool" ]; then
+        mounts+=("-v" "${PWD}/example-custom-tool:/build/example-custom-tool:ro")
+    fi
+    
+    # Mount example-custom-lib if it exists
+    if [ -d "${PWD}/example-custom-lib" ]; then
+        mounts+=("-v" "${PWD}/example-custom-lib:/build/example-custom-lib:ro")
+    fi
+    
+    # Add Docker volume mounts for caches
+    mounts+=(
+        "-v" "sources-cache:/build/sources"
+        "-v" "toolchains-cache:/build/toolchains"
+        "-v" "toolchain-musl:/build/toolchains-musl"
+        "-v" "toolchain-glibc:/build/toolchains-glibc"
+        "-v" "deps-cache:/build/deps-cache"
+    )
+    
+    # No extra mounts needed for shared library builds anymore
+    # Shared libraries now use output/$arch/shared/
+    
+    # Environment variables
+    local skip_exists="true"
+    if [ "$FORCE_REBUILD" = "true" ]; then
+        skip_exists="false"
+    elif [ -n "${SKIP_IF_EXISTS:-}" ]; then
+        skip_exists="$SKIP_IF_EXISTS"
+    fi
+    
+    local env_vars=(
+        "-e" "DEBUG=${DEBUG:-}"
+        "-e" "SKIP_IF_EXISTS=$skip_exists"
+        "-e" "BASE_DIR=/build"
+        "-e" "STATIC_SCRIPT_DIR=/build/scripts/static"
+    )
+    
+    # Add LIBC_TYPE if set
+    if [ -n "${LIBC_TYPE:-}" ]; then
+        env_vars+=("-e" "LIBC_TYPE=$LIBC_TYPE")
+    fi
+    
+    # Add SHAREDLIB_LIBC if in shared lib mode
+    if [ "$SHAREDLIB_MODE" = true ]; then
+        env_vars+=("-e" "LIBC_TYPE=$SHAREDLIB_LIBC")
+    fi
+    
+    # Add DEBUG_FLAGS if set
+    if [ -n "${DEBUG_FLAGS:-}" ]; then
+        env_vars+=($DEBUG_FLAGS)
+    fi
+    
+    # Ensure Docker image exists
+    if ! docker image inspect sthenos-builder >/dev/null 2>&1; then
+        echo "Building Docker image..."
+        docker build -t sthenos-builder .
+    fi
+    
+    # Run the container
+    if [ "$interactive" = "true" ] && [ -z "$command" ]; then
+        # Interactive shell mode
+        exec docker run --rm $tty_flags \
+            "${mounts[@]}" \
+            "${env_vars[@]}" \
+            -w "$work_dir" \
+            sthenos-builder \
+            /bin/bash
+    else
+        # Command execution mode
+        exec docker run --rm $tty_flags \
+            "${mounts[@]}" \
+            "${env_vars[@]}" \
+            -w "$work_dir" \
+            sthenos-builder \
+            bash -c "$command"
+    fi
+}
 
 # Parse arguments
-for arg in "$@"; do
+SKIP_NEXT=false
+for i in $(seq 1 $#); do
+    if [ "$SKIP_NEXT" = true ]; then
+        SKIP_NEXT=false
+        continue
+    fi
+    
+    # Stop processing if --shell was found
+    if [ "$SKIP_REMAINING" = true ]; then
+        break
+    fi
+    
+    arg="${!i}"
     case $arg in
         --arch=*)
             ARCHITECTURES="${arg#*=}"
             ;;
         --arch)
-            # Skip, next arg will be the architecture
-            ;;
-        -j*)
-            # Deprecated - parallel builds removed
-            echo "Warning: -j option is deprecated. Builds are now sequential per architecture."
-            echo "         Compilation still uses all CPU cores with make -j$(nproc)"
-            ;;
-        --mode=*)
-            # Mode option removed - always uses embedded optimizations
-            echo "Warning: --mode option is deprecated. All builds use embedded optimizations."
-            shift
+            # Next arg will be the architecture
+            next_idx=$((i + 1))
+            if [ $next_idx -le $# ]; then
+                ARCHITECTURES="${!next_idx}"
+                SKIP_NEXT=true
+            fi
             ;;
         -d|--debug)
             DEBUG="1"
+            ;;
+        -f|--force)
+            FORCE_REBUILD=true
             ;;
         --download)
             DOWNLOAD_ONLY=true
@@ -43,6 +346,44 @@ for arg in "$@"; do
             ;;
         -i|--interactive)
             INTERACTIVE=true
+            ;;
+        --no-shared)
+            # Skip building shared libraries
+            NO_SHARED=true
+            ;;
+        --shell)
+            # Run command in container with build environment
+            SHELL_CMD=true
+            SKIP_REMAINING=true
+            ;;
+        --libc)
+            # Get the next argument as libc type
+            next_idx=$((i + 1))
+            if [ $next_idx -le $# ]; then
+                SHAREDLIB_LIBC="${!next_idx}"
+                SKIP_NEXT=true
+            fi
+            ;;
+        -m|--mode)
+            # Get the next argument as build mode
+            next_idx=$((i + 1))
+            if [ $next_idx -le $# ]; then
+                BUILD_MODE="${!next_idx}"
+                SKIP_NEXT=true
+            fi
+            ;;
+        --check-missing)
+            CHECK_MISSING=true
+            # Get optional filter argument
+            next_idx=$((i + 1))
+            if [ $next_idx -le $# ]; then
+                next_arg="${!next_idx}"
+                # Check if next arg is not another option
+                if [[ ! "$next_arg" =~ ^- ]]; then
+                    ARCHITECTURES="$next_arg"
+                    SKIP_NEXT=true
+                fi
+            fi
             ;;
         --help|-h)
             echo "Usage: $0 [TOOL] [OPTIONS]"
@@ -61,18 +402,39 @@ for arg in "$@"; do
             echo "  ncat-ssl    Network utility (with OpenSSL)"
             echo "  tcpdump     Network packet analyzer"
             echo "  gdbserver   Remote debugging server"
-            echo "  gdb         GNU debugger"
             echo "  nmap        Network exploration and security auditing"
             echo "  dropbear    Lightweight SSH server/client (includes scp)"
             echo "  ltrace      Library call tracer (glibc-based)"
+            echo "  ply         Dynamic tracer using BPF (limited arch support, LE only)"
+            echo "  can-utils   CAN bus utilities (candump, cansend, etc.)"
+            echo "  shell       Shell utilities as static executables (output/<arch>/shell/)"
+            echo "  custom      Custom tool template (musl, modify scripts/tools/build-custom.sh)"
+            echo "  custom-glibc Custom tool template built with glibc"
+            echo ""
+            echo "SHARED LIBRARIES (LD_PRELOAD):"
+            echo "  custom-lib  Custom library template (prints info at load)"
+            echo "  libshell    All shell libraries (bind, reverse, env, fifo, helper)"
+            echo "  libdesock   Socket desocketing library"
+            echo "  libtlsnoverify TLS verification bypass"
+            echo "  shell-bind  Bind shell library"
+            echo "  shell-reverse Reverse shell library"
+            echo "  shell-env   Environment variable executor"
+            echo "  shell-fifo  FIFO-based command executor"
+            echo "  shell-helper Script executor"
             echo ""
             echo "OPTIONS:"
             echo "  --arch ARCH      Build for specific architecture only"
             echo "  --arch all       Build for all architectures (default)"
             echo "  -d, --debug      Debug mode (verbose output)"
+            echo "  -f, --force      Force rebuild (ignore existing binaries)"
+            echo "  -m, --mode MODE  Build mode: standard (default), embedded, minimal"
             echo "  -i, --interactive  Launch interactive shell in build container"
+            echo "  --no-shared      Skip building shared libraries (built by default)"
+            echo "  --shell CMD      Run command in container with build environment"
             echo "  --download       Download sources and toolchains only"
             echo "  --clean          Clean output and logs directories"
+            echo "  --check-missing [ARCH]  Check for missing binaries (optionally filter by arch)"
+            echo "  --libc TYPE      For shared libs: glibc (default) or musl"
             echo ""
             echo "ARCHITECTURES:"
             echo "  ARM 32-bit: arm32v5le arm32v5lehf arm32v7le arm32v7lehf"
@@ -80,63 +442,72 @@ for arg in "$@"; do
             echo "  ARM 64-bit: aarch64 aarch64_be"
             echo "  x86 32-bit: i486 ix86le (i686)"
             echo "  x86 64-bit: x86_64"
-            echo "  MIPS 32-bit: mips32v2le mips32v2be mipsn32 mipsn32el"
+            echo "  MIPS 32-bit: mips32le mips32be mipsn32 mipsn32el"
             echo "  MIPS 64-bit: mips64 mips64le mips64n32 mips64n32el"
-            echo "  PowerPC: ppc32be powerpcle powerpc64 ppc64le"
+            echo "  PowerPC: ppc32be ppc32le ppc64be ppc64le"
             echo "  SuperH: sh2 sh2eb sh4 sh4eb"
             echo "  Others: microblaze microblazeel or1k m68k s390x"
             echo "  RISC-V: riscv32 riscv64"
             echo ""
             echo "EXAMPLES:"
-            echo "  $0                       # Build all tools for all architectures"
+            echo "  $0                       # Build all tools & shared libs for all architectures"
             echo "  $0 strace                # Build strace for all architectures"
-            echo "  $0 --arch x86_64         # Build all tools for x86_64"
+            echo "  $0 --arch x86_64         # Build all tools & shared libs for x86_64"
             echo "  $0 strace --arch x86_64  # Build strace for x86_64 only"
+            echo "  $0 -f strace --arch x86_64  # Force rebuild strace for x86_64"
+            echo "  $0 --no-shared           # Build only static tools, skip shared libs"
+            echo "  $0 libshell --arch x86_64 # Build shell libs for x86_64 (glibc)"
+            echo "  $0 libdesock --libc musl  # Build libdesock for all archs (musl)"
             exit 0
             ;;
-        strace|busybox|busybox_nodrop|bash|socat|socat-ssl|ncat|ncat-ssl|tcpdump|gdbserver|gdb|nmap|dropbear|ltrace)
-            TOOLS="$arg"
-            ;;
-        arm32v5le|arm32v5lehf|arm32v7le|arm32v7lehf|armeb|armv6|armv7m|armv7r|\
-        mips32v2le|mips32v2be|mipsn32|mipsn32el|mips64|mips64le|mips64n32|mips64n32el|\
-        ppc32be|powerpcle|powerpc64|ppc64le|\
-        i486|ix86le|x86_64|aarch64|aarch64_be|\
-        sh2|sh2eb|sh4|sh4eb|\
-        microblaze|microblazeel|or1k|m68k|s390x|\
-        riscv32|riscv64)
-            ARCHITECTURES="$arg"
+        # Shared libraries - route to shared library build chain
+        custom-lib|libshell|libdesock|libtlsnoverify|shell-bind|shell-reverse|shell-env|shell-fifo|shell-helper|tls-noverify)
+            SHAREDLIB_MODE=true
+            SHAREDLIB_NAME="$arg"
             ;;
         all)
             # Could be tools or architectures, keep default
             ;;
         *)
-            # Check if previous arg was --arch
-            if [[ "${prev_arg}" == "--arch" ]]; then
+            # Check if it's a valid tool (using TOOL_SCRIPTS associative array)
+            if [[ -n "${TOOL_SCRIPTS[$arg]+x}" ]]; then
+                TOOLS="$arg"
+            # Check if it's a valid architecture (using SUPPORTED_ARCHS array)
+            elif printf '%s\n' "${SUPPORTED_ARCHS[@]}" | grep -q "^$arg$"; then
                 ARCHITECTURES="$arg"
             else
-                echo "Error: Invalid architecture '$arg'"
+                # Unknown argument - show help
+                echo "Error: Invalid argument '$arg'"
                 echo ""
                 exec "$0" --help
             fi
             ;;
     esac
-    prev_arg="$arg"
 done
 
-# Validate architecture if specified and not "all"
-if [ -n "$ARCHITECTURES" ] && [ "$ARCHITECTURES" != "all" ]; then
-    # List of valid architectures
-    VALID_ARCHS="arm32v5le arm32v5lehf arm32v7le arm32v7lehf armeb armv6 armv7m armv7r \
-                 mips32v2le mips32v2be mipsn32 mipsn32el mips64 mips64le mips64n32 mips64n32el \
-                 ppc32be powerpcle powerpc64 ppc64le \
-                 i486 ix86le x86_64 aarch64 aarch64_be \
-                 sh2 sh2eb sh4 sh4eb \
-                 microblaze microblazeel or1k m68k s390x \
-                 riscv32 riscv64"
-    
-    # Check if architecture is valid
+# If shell mode was requested, grab the rest of the arguments as the command
+if [ "$SHELL_CMD" = true ]; then
+    # Find where --shell was in the arguments and take everything after it
+    SHELL_COMMAND=""
+    shell_found=false
+    for arg in "$@"; do
+        if [ "$shell_found" = true ]; then
+            if [ -z "$SHELL_COMMAND" ]; then
+                SHELL_COMMAND="$arg"
+            else
+                SHELL_COMMAND="$SHELL_COMMAND $arg"
+            fi
+        elif [ "$arg" = "--shell" ]; then
+            shell_found=true
+        fi
+    done
+fi
+
+# Validate architecture if specified and not "all" (skip for check-missing which uses patterns)
+if [ "$CHECK_MISSING" != true ] && [ -n "$ARCHITECTURES" ] && [ "$ARCHITECTURES" != "all" ]; then
+    # Check if architecture is valid using SUPPORTED_ARCHS array
     valid=false
-    for valid_arch in $VALID_ARCHS; do
+    for valid_arch in "${SUPPORTED_ARCHS[@]}"; do
         if [ "$ARCHITECTURES" = "$valid_arch" ]; then
             valid=true
             break
@@ -146,24 +517,36 @@ if [ -n "$ARCHITECTURES" ] && [ "$ARCHITECTURES" != "all" ]; then
     if [ "$valid" = false ]; then
         echo "Error: Invalid architecture '$ARCHITECTURES'"
         echo ""
-        exec "$0" --help
+        echo "Valid architectures are:"
+        printf '%s\n' "${SUPPORTED_ARCHS[@]}" | sort | column
+        exit 1
     fi
 fi
 
-echo "=============================================="
-echo "Embedded Toolkit Build Pipeline (Alpine)"
-echo "=============================================="
+# Show banner for interactive builds
+if [ "$INTERACTIVE" != true ] && [ "$CLEAN" != true ] && [ "$DOWNLOAD_ONLY" != true ]; then
+    show_banner
+fi
+
 echo "Start time: $(date)"
 echo
+
+# Handle check-missing mode
+if [ "$CHECK_MISSING" = true ]; then
+    # If ARCHITECTURES is "all", pass empty string to check all existing directories
+    if [ "$ARCHITECTURES" = "all" ]; then
+        check_missing ""
+    else
+        check_missing "$ARCHITECTURES"
+    fi
+    exit $?
+fi
 
 # Handle clean mode
 if [ "$CLEAN" = true ]; then
     echo "Cleaning output and logs directories..."
     # Use Docker to clean with proper permissions
-    docker run --rm \
-        -v "${PWD}:/build" \
-        sthenos-musl-builder \
-        bash -c "rm -rf /build/output/* /build/logs/* && echo 'Clean complete!'"
+    run_in_container "rm -rf /build/output/* /build/logs/* && echo 'Clean complete!'"
     echo "- Removed all files from output/"
     echo "- Removed all files from logs/"
     exit 0
@@ -173,19 +556,17 @@ fi
 if [ "$INTERACTIVE" = true ]; then
     echo "Starting interactive shell in build container..."
     echo "=============================================="
-    echo "You are now in the Stheno build environment"
+    echo "You are now in the Sthenos build environment"
     echo "Build directory: /build"
     echo "Sources cache: /build/sources"
     echo "Toolchains cache: /build/toolchains"
     echo "=============================================="
-    exec docker run --rm -it \
-        -v "${PWD}:/build" \
-        -v sources-cache:/build/sources \
-        -v toolchains-cache:/build/toolchains \
-        -v deps-cache:/build/deps-cache \
-        -w /build \
-        sthenos-musl-builder \
-        /bin/bash
+    run_in_container "" true
+fi
+
+# Handle shell command mode
+if [ "$SHELL_CMD" = true ]; then
+    run_in_container "$SHELL_COMMAND"
 fi
 
 # Handle download-only mode
@@ -198,10 +579,50 @@ if [ "$DOWNLOAD_ONLY" = true ]; then
     exit 0
 fi
 
-# Build Docker image
-if ! docker image inspect sthenos-musl-builder >/dev/null 2>&1; then
+# Handle shared library mode - route to preload build system
+if [ "$SHAREDLIB_MODE" = true ]; then
+    echo "Building shared library: $SHAREDLIB_NAME"
+    
+    # Map library names to preload names if needed
+    case "$SHAREDLIB_NAME" in
+        libshell)
+            # libshell could map to multiple shell libs
+            SHAREDLIB_NAME="shell-bind shell-reverse shell-env shell-fifo shell-helper"
+            ;;
+        libtlsnoverify)
+            SHAREDLIB_NAME="tls-noverify"
+            ;;
+    esac
+    
+    # If no specific libc was requested, build for both
+    if [ "$SHAREDLIB_LIBC" = "glibc" ] && [ -z "${LIBC_TYPE:-}" ]; then
+        # Build for both glibc and musl
+        run_in_container "
+            source /build/scripts/lib/toolchain_manager.sh
+            
+            echo 'Building with glibc...'
+            export LIBC_TYPE=glibc
+            $DEBUG_CMD /build/scripts/shared/build-shared.sh $SHAREDLIB_NAME $ARCHITECTURES
+            
+            echo ''
+            echo 'Building with musl...'
+            export LIBC_TYPE=musl
+            $DEBUG_CMD /build/scripts/shared/build-shared.sh $SHAREDLIB_NAME $ARCHITECTURES
+        "
+    else
+        # Build for specific libc only
+        run_in_container "
+            source /build/scripts/lib/toolchain_manager.sh
+            export LIBC_TYPE=$SHAREDLIB_LIBC
+            $DEBUG_CMD /build/scripts/shared/build-shared.sh $SHAREDLIB_NAME $ARCHITECTURES
+        "
+    fi
+fi
+
+# Build Docker image if needed
+if ! docker image inspect sthenos-builder >/dev/null 2>&1; then
     echo "Building Docker image..."
-    docker build -t sthenos-musl-builder -f Dockerfile.musl .
+    docker build -t sthenos-builder .
 fi
 
 # Set debug flags if enabled
@@ -213,37 +634,80 @@ else
     DEBUG_CMD=""
 fi
 
-# Route ltrace to glibc build system
-if [ "$TOOLS" = "ltrace" ]; then
-    # Build glibc Docker image if needed
-    if ! docker image inspect sthenos-glibc-builder >/dev/null 2>&1; then
-        echo "Building glibc Docker image..."
-        docker build -t sthenos-glibc-builder -f Dockerfile.glibc .
+# Determine libc type
+LIBC_TYPE="musl"  # Default to musl
+
+# Route ltrace and custom-glibc to glibc build system
+if [ "$TOOLS" = "ltrace" ] || [ "$TOOLS" = "custom-glibc" ]; then
+    LIBC_TYPE="glibc"
+fi
+
+# Also check if any architectures are glibc-only
+if [ "$ARCHITECTURES" != "all" ]; then
+    # Split architectures and check each one
+    IFS=',' read -ra ARCH_ARRAY <<< "$ARCHITECTURES"
+    for arch in "${ARCH_ARRAY[@]}"; do
+        if is_glibc_only_arch "$arch"; then
+            LIBC_TYPE="glibc"
+            break
+        fi
+    done
+fi
+
+# Use unified Docker image for both musl and glibc
+DOCKER_IMAGE="sthenos-builder"
+
+# Build Docker image if needed
+if ! docker image inspect $DOCKER_IMAGE >/dev/null 2>&1; then
+    echo "Building Docker image..."
+    docker build -t $DOCKER_IMAGE .
+fi
+
+# Determine if this is a static build (all non-shared-lib builds)
+if [ "$SHAREDLIB_MODE" != true ]; then
+    # Set logging based on debug mode
+    LOG_ENABLED="false"
+    if [ -z "$DEBUG" ]; then
+        LOG_ENABLED="true"
     fi
     
-    # Use glibc build system for ltrace
-    exec docker run --rm \
-        -v "${PWD}:/build" \
-        -v sources-cache:/build/sources \
-        -v toolchains-preload-cache:/build/toolchains-preload \
-        -v deps-cache:/build/deps-cache \
-        $DEBUG_FLAGS \
-        sthenos-glibc-builder:latest \
-        $DEBUG_CMD /build/scripts/build-unified-glibc.sh \
-        "$TOOLS" \
-        "$ARCHITECTURES"
-else
-    # Always use unified build system for musl tools
-    exec docker run --rm \
-        -v "${PWD}:/build" \
-        -v sources-cache:/build/sources \
-        -v toolchains-cache:/build/toolchains \
-        -v deps-cache:/build/deps-cache \
-        $DEBUG_FLAGS \
-        -e SKIP_IF_EXISTS="${SKIP_IF_EXISTS:-true}" \
-        sthenos-musl-builder:latest \
-        $DEBUG_CMD /build/scripts/build-unified.sh \
-        --log \
-        "$TOOLS" \
-        "$ARCHITECTURES"
+    # Set build mode
+    MODE="${BUILD_MODE:-standard}"
+    
+    # Build shared libraries by default when building all tools (unless --no-shared was specified)
+    # Don't build shared libs when building a specific tool
+    BUILD_SHARED="false"
+    if [ "$NO_SHARED" != true ] && [ "$TOOLS" = "all" ]; then
+        BUILD_SHARED="true"
+    fi
+    
+    # Execute both static and shared builds in a single container run
+    run_in_container "
+        source /build/scripts/lib/toolchain_manager.sh
+        source /build/scripts/static/build-static.sh
+        
+        # First build static tools
+        run_static_builds '$TOOLS' '$ARCHITECTURES' '$LIBC_TYPE' '$MODE' '$LOG_ENABLED' '$DEBUG'
+        
+        # Then build shared libraries if requested
+        if [ '$BUILD_SHARED' = 'true' ]; then
+            echo ''
+            echo 'Building shared libraries...'
+            echo '=============================='
+            
+            SHARED_LIBS='shell-bind shell-reverse shell-env shell-fifo shell-helper tls-noverify'
+            
+            # Build for both glibc and musl
+            for libc in glibc musl; do
+                echo ''
+                echo \"Building shared libraries with \$libc...\"
+                export LIBC_TYPE=\$libc
+                export LOG_ENABLED='$LOG_ENABLED'
+                export DEBUG='$DEBUG'
+                $DEBUG_CMD /build/scripts/shared/build-shared.sh \$SHARED_LIBS '$ARCHITECTURES'
+            done
+        fi
+    "
 fi
+
+# This point should not be reached since we exec above

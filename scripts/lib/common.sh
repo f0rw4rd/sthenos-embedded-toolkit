@@ -1,387 +1,268 @@
 #!/bin/bash
-# Common functions and variables for all build scripts
 
-# Ensure toolchain exists (fail if missing)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export SCRIPT_DIR
+
+BASE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+export BASE_DIR
+
+STATIC_SCRIPT_DIR="$BASE_DIR/scripts/static"
+export STATIC_SCRIPT_DIR
+
+COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")"
+source "$COMMON_DIR/logging.sh"
+source "$COMMON_DIR/core/compile_flags.sh"
+source "$COMMON_DIR/build_helpers.sh"
+source "$COMMON_DIR/core/architectures.sh"
+source "$COMMON_DIR/core/arch_helper.sh"
+
 download_toolchain() {
     local arch=$1
-    local toolchain_dir="/build/toolchains/$arch"
     
-    # Check if toolchain exists
-    if [ -d "$toolchain_dir/bin" ]; then
-        return 0
-    fi
+    # STUB FUNCTION: Called by tool build scripts but does nothing
+    # Toolchains are pre-downloaded in Docker image during build
+    # The actual toolchain verification happens in setup_arch()
+    # For actual toolchain download, see download_toolchain_impl() in download-toolchains.sh
     
-    # Toolchain missing - fail immediately
-    echo "ERROR: Toolchain not found for $arch"
-    echo "Expected toolchain directory: $toolchain_dir"
-    echo "Toolchains should be pre-downloaded during Docker image build"
-    echo "Please rebuild the Docker image with: docker build -t stheno-toolkit ."
-    return 1
+    return 0
 }
 
-# Set architecture variables
+declare -A TOOL_SCRIPTS=(
+    ["strace"]="$SCRIPT_DIR/../static/tools/build-strace.sh"
+    ["busybox"]="$SCRIPT_DIR/../static/tools/build-busybox.sh"
+    ["busybox_nodrop"]="$SCRIPT_DIR/../static/tools/build-busybox-nodrop.sh"
+    ["bash"]="$SCRIPT_DIR/../static/tools/build-bash.sh"
+    ["socat"]="$SCRIPT_DIR/../static/tools/build-socat.sh"
+    ["socat-ssl"]="$SCRIPT_DIR/../static/tools/build-socat-ssl.sh"
+    ["tcpdump"]="$SCRIPT_DIR/../static/tools/build-tcpdump.sh"
+    ["ncat"]="$SCRIPT_DIR/../static/tools/build-ncat.sh"
+    ["ncat-ssl"]="$SCRIPT_DIR/../static/tools/build-ncat-ssl.sh"
+    ["gdbserver"]="$SCRIPT_DIR/../static/tools/build-gdbserver.sh"
+    ["nmap"]="$SCRIPT_DIR/../static/tools/build-nmap.sh"
+    ["dropbear"]="$SCRIPT_DIR/../static/tools/build-dropbear.sh"
+    ["ltrace"]="$SCRIPT_DIR/../static/tools/build-ltrace.sh"
+    ["ply"]="$SCRIPT_DIR/../static/tools/build-ply.sh"
+    ["can-utils"]="$SCRIPT_DIR/../static/tools/build-can-utils.sh"
+    ["shell"]="$SCRIPT_DIR/../static/tools/build-shell-static.sh"
+    ["custom"]="$SCRIPT_DIR/../static/tools/build-custom.sh"
+    ["custom-glibc"]="$SCRIPT_DIR/../static/tools/build-custom-glibc.sh"
+)
+
 setup_arch() {
     local arch=$1
     
-    # Set variables based on architecture
-    case $arch in
-        arm32v5le)
-            CROSS_COMPILE="arm-linux-musleabi-"
-            HOST="arm-linux-musleabi"
-            CFLAGS_ARCH="-march=armv5te -marm"
-            CONFIG_ARCH="arm"
+    # Validate architecture
+    if ! is_valid_arch "$arch"; then
+        log_error "Unknown architecture: $arch"
+        return 1
+    fi
+    
+    # Get architecture info from centralized config
+    local musl_name=$(get_musl_toolchain "$arch")
+    local musl_cross=$(get_musl_cross "$arch")
+    local glibc_name=$(get_glibc_toolchain "$arch")
+    local bootlin_arch=$(get_bootlin_arch "$arch")
+    local cflags_arch=$(get_arch_cflags "$arch")
+    local config_arch=$(get_config_arch "$arch")
+    
+    local toolchain_dir
+    local toolchain_type
+    
+    # Try musl first, then glibc if musl not available
+    if [ -n "$musl_name" ]; then
+        # Musl toolchain setup
+        toolchain_type="musl"
+        CROSS_COMPILE="${musl_name}-"
+        HOST="$musl_name"
+        
+        # Use centralized toolchain directory structure
+        toolchain_dir="/build/toolchains-musl/${musl_name}-cross"
+        
+    elif [ -n "$glibc_name" ]; then
+        # Glibc-only toolchain setup (Bootlin toolchains)
+        toolchain_type="glibc"
+        CROSS_COMPILE="${glibc_name}-"
+        HOST="$glibc_name"
+        
+        # Bootlin glibc toolchains follow pattern: /build/toolchains-glibc/<bootlin_arch>--glibc--stable-YYYY.MM-N
+        if [ -n "$bootlin_arch" ]; then
+            # Find the actual toolchain directory (may have date suffix)
+            local toolchain_pattern="/build/toolchains-glibc/${bootlin_arch}--glibc--stable-*"
+            toolchain_dir=$(find /build/toolchains-glibc -maxdepth 1 -type d -name "${bootlin_arch}--glibc--stable-*" | head -1)
+            
+            if [ -z "$toolchain_dir" ]; then
+                log_error "No Bootlin glibc toolchain found matching pattern: ${bootlin_arch}--glibc--stable-*"
+                return 1
+            fi
+        else
+            log_error "No bootlin_arch defined for glibc-only architecture: $arch"
+            return 1
+        fi
+        
+    else
+        log_error "No toolchain defined for architecture: $arch (neither musl nor glibc)"
+        return 1
+    fi
+    
+    # Clear previous values to prevent contamination
+    unset CFLAGS_ARCH CONFIG_ARCH
+    
+    CFLAGS_ARCH="$cflags_arch"
+    CONFIG_ARCH="$config_arch"
+    
+    # Check if toolchain exists
+    if [ ! -d "$toolchain_dir" ]; then
+        log_error "Toolchain not found for $arch at $toolchain_dir ($toolchain_type)"
+        log_error "Please rebuild the Docker image"
+        return 1
+    fi
+    
+    export PATH="${toolchain_dir}/bin:$PATH"
+    export CROSS_COMPILE HOST CFLAGS_ARCH CONFIG_ARCH
+    
+    # Set additional toolchain variables
+    export CC="${CROSS_COMPILE}gcc"
+    export CXX="${CROSS_COMPILE}g++"
+    export AR="${CROSS_COMPILE}ar"
+    export RANLIB="${CROSS_COMPILE}ranlib"
+    export STRIP="${CROSS_COMPILE}strip"
+    export LD="${CROSS_COMPILE}ld"
+    
+    # Set toolchain type for build scripts that may need it
+    export TOOLCHAIN_TYPE="$toolchain_type"
+    
+    # Verify compiler exists
+    if ! command -v "${CROSS_COMPILE}gcc" >/dev/null 2>&1; then
+        log_error "Compiler ${CROSS_COMPILE}gcc not found in PATH"
+        return 1
+    fi
+    
+    mkdir -p /build/output/$arch
+    
+    log_tool "$(date +%H:%M:%S)" "Setup $arch with $toolchain_type toolchain: $toolchain_dir"
+    
+    # Debug output when DEBUG is set
+    if [ "${DEBUG:-0}" = "1" ] || [ "${DEBUG:-0}" = "true" ]; then
+        log "[DEBUG] Toolchain Configuration for $arch:"
+        log "  CROSS_COMPILE: $CROSS_COMPILE"
+        log "  CC: $CC"
+        log "  CXX: $CXX"
+        log "  AR: $AR"
+        log "  LD: $LD"
+        log "  PATH: $PATH"
+        log "  Toolchain Dir: $toolchain_dir"
+        log "  Toolchain Type: $toolchain_type"
+        which "${CROSS_COMPILE}gcc" 2>/dev/null && log "  Compiler Path: $(which ${CROSS_COMPILE}gcc)"
+    fi
+    
+    return 0
+}
+
+
+get_arch_name() {
+    local arch=$1
+    # Use the mapping function from arch_helper
+    map_arch_name "$arch"
+}
+
+download_and_extract() {
+    local url=$1
+    local dest_dir=$2
+    local strip_components=${3:-1}
+    
+    local filename=$(basename "$url")
+    
+    source "$(dirname "${BASH_SOURCE[0]}")/build_helpers.sh"
+    if ! download_source "package" "unknown" "$url"; then
+        return 1
+    fi
+    
+    log_tool "$(date +%H:%M:%S)" "Extracting $filename..."
+    
+    local source_file="/build/sources/$filename"
+    
+    case "$filename" in
+        *.tar.gz|*.tgz)
+            tar xzf "$source_file" -C "$dest_dir" --strip-components=$strip_components
             ;;
-        arm32v5lehf)
-            CROSS_COMPILE="arm-linux-musleabihf-"
-            HOST="arm-linux-musleabihf"
-            # ARMv5TE with VFP for hard-float
-            CFLAGS_ARCH="-march=armv5te+fp -mfpu=vfp -mfloat-abi=hard -marm"
-            CONFIG_ARCH="arm"
+        *.tar.bz2)
+            tar xjf "$source_file" -C "$dest_dir" --strip-components=$strip_components
             ;;
-        arm32v7le)
-            CROSS_COMPILE="armv7l-linux-musleabihf-"
-            HOST="armv7l-linux-musleabihf"
-            CFLAGS_ARCH="-march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard"
-            CONFIG_ARCH="arm"
-            ;;
-        arm32v7lehf)
-            CROSS_COMPILE="armv7l-linux-musleabihf-"
-            HOST="armv7l-linux-musleabihf"
-            CFLAGS_ARCH="-march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard"
-            CONFIG_ARCH="arm"
-            ;;
-        mips32v2le)
-            CROSS_COMPILE="mipsel-linux-musl-"
-            HOST="mipsel-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="mips"
-            ;;
-        mips32v2be)
-            CROSS_COMPILE="mips-linux-musl-"
-            HOST="mips-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="mips"
-            ;;
-        ppc32be)
-            CROSS_COMPILE="powerpc-linux-musl-"
-            HOST="powerpc-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="powerpc"
-            ;;
-        ix86le)
-            CROSS_COMPILE="i686-linux-musl-"
-            HOST="i686-linux-musl"
-            CFLAGS_ARCH="-march=i686 -mtune=generic"
-            CONFIG_ARCH="i386"
-            ;;
-        # 64-bit architectures
-        x86_64)
-            CROSS_COMPILE="x86_64-linux-musl-"
-            HOST="x86_64-linux-musl"
-            CFLAGS_ARCH="-march=x86-64 -mtune=generic"
-            CONFIG_ARCH="x86_64"
-            ;;
-        aarch64)
-            CROSS_COMPILE="aarch64-linux-musl-"
-            HOST="aarch64-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="aarch64"
-            ;;
-        mips64le)
-            CROSS_COMPILE="mips64el-linux-musl-"
-            HOST="mips64el-linux-musl"
-            CFLAGS_ARCH="-march=mips64r2"
-            CONFIG_ARCH="mips64"
-            ;;
-        ppc64le)
-            CROSS_COMPILE="powerpc64le-linux-musl-"
-            HOST="powerpc64le-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="powerpc64"
-            ;;
-        # Additional ARM variants
-        armeb)
-            CROSS_COMPILE="armeb-linux-musleabi-"
-            HOST="armeb-linux-musleabi"
-            CFLAGS_ARCH="-mbig-endian"
-            CONFIG_ARCH="arm"
-            ;;
-        armv6)
-            CROSS_COMPILE="armv6-linux-musleabihf-"
-            HOST="armv6-linux-musleabihf"
-            CFLAGS_ARCH="-march=armv6 -mfpu=vfp -mfloat-abi=hard"
-            CONFIG_ARCH="arm"
-            ;;
-        armv7m)
-            CROSS_COMPILE="armv7m-linux-musleabi-"
-            HOST="armv7m-linux-musleabi"
-            CFLAGS_ARCH="-march=armv7-m -mthumb"
-            CONFIG_ARCH="arm"
-            ;;
-        armv7r)
-            CROSS_COMPILE="armv7r-linux-musleabihf-"
-            HOST="armv7r-linux-musleabihf"
-            CFLAGS_ARCH="-march=armv7-r"
-            CONFIG_ARCH="arm"
-            ;;
-        # Additional MIPS variants
-        mipsn32)
-            CROSS_COMPILE="mips-linux-musln32sf-"
-            HOST="mips-linux-musln32sf"
-            CFLAGS_ARCH="-mabi=n32"
-            CONFIG_ARCH="mips"
-            ;;
-        mipsn32el)
-            CROSS_COMPILE="mipsel-linux-musln32sf-"
-            HOST="mipsel-linux-musln32sf"
-            CFLAGS_ARCH="-mabi=n32"
-            CONFIG_ARCH="mips"
-            ;;
-        mips64n32)
-            CROSS_COMPILE="mips64-linux-musln32-"
-            HOST="mips64-linux-musln32"
-            CFLAGS_ARCH="-mabi=n32"
-            CONFIG_ARCH="mips64"
-            ;;
-        mips64n32el)
-            CROSS_COMPILE="mips64el-linux-musln32-"
-            HOST="mips64el-linux-musln32"
-            CFLAGS_ARCH="-mabi=n32"
-            CONFIG_ARCH="mips64"
-            ;;
-        # PowerPC variants
-        powerpc64)
-            CROSS_COMPILE="powerpc64-linux-musl-"
-            HOST="powerpc64-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="powerpc64"
-            ;;
-        powerpcle)
-            CROSS_COMPILE="powerpcle-linux-musl-"
-            HOST="powerpcle-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="powerpc"
-            ;;
-        # Other architectures
-        microblaze)
-            CROSS_COMPILE="microblaze-linux-musl-"
-            HOST="microblaze-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="microblaze"
-            ;;
-        microblazeel)
-            CROSS_COMPILE="microblazeel-linux-musl-"
-            HOST="microblazeel-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="microblaze"
-            ;;
-        or1k)
-            CROSS_COMPILE="or1k-linux-musl-"
-            HOST="or1k-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="openrisc"
-            ;;
-        m68k)
-            CROSS_COMPILE="m68k-linux-musl-"
-            HOST="m68k-linux-musl"
-            CFLAGS_ARCH="-mcpu=68020"
-            CONFIG_ARCH="m68k"
-            ;;
-        sh2)
-            CROSS_COMPILE="sh2-linux-musl-"
-            HOST="sh2-linux-musl"
-            CFLAGS_ARCH="-m2"
-            CONFIG_ARCH="sh"
-            ;;
-        sh2eb)
-            CROSS_COMPILE="sh2eb-linux-musl-"
-            HOST="sh2eb-linux-musl"
-            CFLAGS_ARCH="-m2 -mb"
-            CONFIG_ARCH="sh"
-            ;;
-        sh4)
-            CROSS_COMPILE="sh4-linux-musl-"
-            HOST="sh4-linux-musl"
-            CFLAGS_ARCH="-m4"
-            CONFIG_ARCH="sh"
-            ;;
-        sh4eb)
-            CROSS_COMPILE="sh4eb-linux-musl-"
-            HOST="sh4eb-linux-musl"
-            CFLAGS_ARCH="-m4 -mb"
-            CONFIG_ARCH="sh"
-            ;;
-        s390x)
-            CROSS_COMPILE="s390x-linux-musl-"
-            HOST="s390x-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="s390"
-            ;;
-        # x86 variants
-        i486)
-            CROSS_COMPILE="i486-linux-musl-"
-            HOST="i486-linux-musl"
-            CFLAGS_ARCH="-march=i486 -mtune=generic"
-            CONFIG_ARCH="i386"
-            ;;
-        # RISC-V
-        riscv32)
-            CROSS_COMPILE="riscv32-linux-musl-"
-            HOST="riscv32-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="riscv"
-            ;;
-        riscv64)
-            CROSS_COMPILE="riscv64-linux-musl-"
-            HOST="riscv64-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="riscv64"
-            ;;
-        # Additional architectures
-        aarch64_be)
-            CROSS_COMPILE="aarch64_be-linux-musl-"
-            HOST="aarch64_be-linux-musl"
-            CFLAGS_ARCH=""
-            CONFIG_ARCH="aarch64"
-            ;;
-        mips64)
-            CROSS_COMPILE="mips64-linux-musl-"
-            HOST="mips64-linux-musl"
-            CFLAGS_ARCH="-march=mips64r2"
-            CONFIG_ARCH="mips64"
+        *.tar.xz)
+            tar xJf "$source_file" -C "$dest_dir" --strip-components=$strip_components
             ;;
         *)
-            echo "Unknown architecture: $arch"
+            log_error "Unknown archive format: $filename"
             return 1
             ;;
     esac
     
-    # Use architecture name directly for toolchain directory
-    local toolchain_dir="$arch"
-    
-    # Check if toolchain exists, download if needed
-    if [ ! -d "/build/toolchains/$toolchain_dir/bin" ]; then
-        echo "Toolchain for $arch not found, downloading..."
-        download_toolchain "$arch" || {
-            echo "Failed to download toolchain for $arch"
-            return 1
-        }
-    fi
-    
-    # Export minimal toolchain variables only (don't export CFLAGS/LDFLAGS here)
-    # Only add to PATH if not already there
-    if [[ ":$PATH:" != *":/build/toolchains/$toolchain_dir/bin:"* ]]; then
-        export PATH="/build/toolchains/$toolchain_dir/bin:$PATH"
-    fi
-    export HOST
-    export CROSS_COMPILE
-    export CONFIG_ARCH
-    # Export individual tool variables but NOT CFLAGS/LDFLAGS
-    export CC="${CROSS_COMPILE}gcc"
-    export CXX="${CROSS_COMPILE}g++"
-    export AR="${CROSS_COMPILE}ar"
-    export STRIP="${CROSS_COMPILE}strip"
-    export RANLIB="${CROSS_COMPILE}ranlib"
-    export LD="${CROSS_COMPILE}ld"
-    
-    # Test if the compiler works
-    if ! $CC --version >/dev/null 2>&1; then
-        echo "Warning: Compiler $CC not found or not working for $arch"
-        echo "Toolchain may need to be downloaded or is incompatible"
-    fi
-    
-    # Export architecture-specific flags separately (not in CFLAGS)
-    export CFLAGS_ARCH
-    
-    # Create output directory
-    mkdir -p /build/output/$arch
-    
     return 0
 }
 
-# Check if binary already exists
-check_binary_exists() {
-    local arch=$1
-    local binary=$2
-    local skip_if_exists="${SKIP_IF_EXISTS:-true}"
-    
-    if [ "$skip_if_exists" = "true" ] && [ -f "/build/output/$arch/$binary" ]; then
-        local size=$(ls -lh "/build/output/$arch/$binary" | awk '{print $5}')
-        echo "[$binary] Already built for $arch ($size), skipping..."
-        return 0
-    fi
-    return 1
-}
-
-# Download and extract source
-download_source() {
-    local name=$1
-    local version=$2
-    local url=$3
-    
-    # Ensure sources directory exists
-    mkdir -p /build/sources
-    
-    # Download if needed
-    local filename=$(basename "$url")
-    if [ ! -f "/build/sources/$filename" ]; then
-        echo "Downloading $name $version..."
-        if ! wget -q --show-progress "$url" -O "/build/sources/$filename"; then
-            echo "Failed to download $name from $url"
-            rm -f "/build/sources/$filename"
-            return 1
-        fi
-    fi
-    
-    # Return success
-    # The caller is responsible for extracting in their build directory
-    return 0
-}
-
-# Common build flags - optimized for embedded systems
-# This function returns flags as separate variables to avoid shell expansion issues
-get_build_flags() {
-    # Base optimization flags
-    BASE_CFLAGS="-Os ${CFLAGS_ARCH:-}"
-    BASE_LDFLAGS="-static -Wl,--build-id=sha1"
-    
-    # Extended flags for full static builds
-    FULL_CFLAGS="-static -Os -fomit-frame-pointer ${CFLAGS_ARCH:-}"
-    FULL_LDFLAGS="-static -Wl,--gc-sections -Wl,--build-id=sha1"
-    
-    # Export as individual variables to avoid eval
-    export BASE_CFLAGS
-    export BASE_LDFLAGS
-    export FULL_CFLAGS
-    export FULL_LDFLAGS
-}
-
-# Build and install binary
-install_binary() {
+verify_static_binary() {
     local binary=$1
-    local arch=$2
-    local source_path=${3:-$binary}
     
-    if [ -f "$source_path" ]; then
-        $STRIP "$source_path"
-        cp "$source_path" "/build/output/$arch/"
-        local size=$(ls -lh "/build/output/$arch/$binary" | awk '{print $5}')
-        echo "$binary built successfully for $arch ($size)"
+    if [ ! -f "$binary" ]; then
+        log_error "Binary not found: $binary"
+        return 1
+    fi
+    
+    # Check if it's statically linked
+    if ldd "$binary" 2>/dev/null | grep -q "not a dynamic executable\|statically linked"; then
+        return 0
+    elif file "$binary" | grep -q "statically linked"; then
         return 0
     else
-        echo "Failed to build $binary for $arch"
+        log_warn "Binary may not be statically linked: $binary"
         return 1
     fi
 }
 
-# Clean build directory
-clean_build() {
-    make clean 2>/dev/null || true
-    make distclean 2>/dev/null || true
-    rm -rf build 2>/dev/null || true
+# Setup toolchain based on libc type
+# Setup toolchain for architecture
+setup_toolchain_for_arch() {
+    local arch=$1
+    
+    if [ "$LIBC_TYPE" = "glibc" ]; then
+        # For glibc builds, we need to get the correct toolchain name
+        # The toolchain is already in PATH from the parent build-static.sh
+        # but we need to get the right prefix for the tools
+        
+        # Source architecture helper to get toolchain name
+        if ! type get_glibc_toolchain >/dev/null 2>&1; then
+            source "$SCRIPT_DIR/core/arch_helper.sh"
+        fi
+        
+        local toolchain_name=$(get_glibc_toolchain "$arch")
+        if [ -z "$toolchain_name" ]; then
+            # Fallback to simple naming
+            toolchain_name="$arch-linux"
+        fi
+        
+        CC="${toolchain_name}-gcc"
+        CXX="${toolchain_name}-g++"
+        LD="${toolchain_name}-ld"
+        AR="${toolchain_name}-ar"
+        RANLIB="${toolchain_name}-ranlib"
+        STRIP="${toolchain_name}-strip"
+        NM="${toolchain_name}-nm"
+        OBJCOPY="${toolchain_name}-objcopy"
+        OBJDUMP="${toolchain_name}-objdump"
+        HOST="${toolchain_name}"
+        CROSS_COMPILE="${toolchain_name}-"
+        export CC CXX LD AR RANLIB STRIP NM OBJCOPY OBJDUMP HOST CROSS_COMPILE
+        return 0
+    else
+        # For musl builds, use the standard setup_arch
+        setup_arch "$arch"
+        return $?
+    fi
 }
 
-# Parallel make with proper job count
-parallel_make() {
-    make -j$(nproc) "$@"
-}
+# Export functions
+export -f setup_arch
+export -f get_arch_name
+export -f download_and_extract
+export -f verify_static_binary
+export -f setup_toolchain_for_arch

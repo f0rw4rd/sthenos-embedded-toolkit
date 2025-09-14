@@ -1,0 +1,223 @@
+name: Build All Tools
+
+on:
+  workflow_dispatch:
+    inputs:
+      architectures:
+        description: 'Architectures to build (comma-separated, or "all" for all architectures)'
+        required: true
+        default: 'all'
+        type: string
+      tools:
+        description: 'Tools to build (comma-separated, or "all" for all tools)'
+        required: true
+        default: 'all'
+        type: string
+      create_release:
+        description: 'Create GitHub release with artifacts'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Split architectures into batches to avoid hitting runner limits
+        arch_batch: [1, 2, 3, 4]
+      fail-fast: false
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Free up disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+        sudo docker image prune --all --force
+        df -h
+
+    - name: Define architecture batches
+      id: define_batches
+      run: |
+        # Define all supported architectures
+        ALL_ARCHS="aarch64 aarch64_be arm32v5le arm32v5lehf arm32v7le arm32v7lehf armeb armebhf armel armelhf armv5l armv5lhf armv6 armv6sf armv7m armv7r i486 ix86le x86_64 m68k microblaze microblazeel mips32be mips32le mips32besf mips32lesf mips64 mips64le mips64n32 mips64n32el mipsn32 mipsn32el or1k ppc32be ppc32besf ppc64le powerpc64 powerpcle powerpclesf riscv32 riscv64 s390x sh2 sh2eb sh4 sh4eb sparc64"
+        
+        # Parse input architectures
+        if [ "${{ github.event.inputs.architectures }}" = "all" ]; then
+          ARCHS="$ALL_ARCHS"
+        else
+          ARCHS="${{ github.event.inputs.architectures }}"
+        fi
+        
+        # Split architectures into 4 batches
+        ARCH_ARRAY=($ARCHS)
+        TOTAL=${#ARCH_ARRAY[@]}
+        BATCH_SIZE=$(( (TOTAL + 3) / 4 ))
+        
+        case ${{ matrix.arch_batch }} in
+          1) START=0; END=$BATCH_SIZE ;;
+          2) START=$BATCH_SIZE; END=$((BATCH_SIZE * 2)) ;;
+          3) START=$((BATCH_SIZE * 2)); END=$((BATCH_SIZE * 3)) ;;
+          4) START=$((BATCH_SIZE * 3)); END=$TOTAL ;;
+        esac
+        
+        BATCH_ARCHS=""
+        for ((i=START; i<END && i<TOTAL; i++)); do
+          BATCH_ARCHS="$BATCH_ARCHS ${ARCH_ARRAY[i]}"
+        done
+        
+        echo "batch_archs=$BATCH_ARCHS" >> $GITHUB_OUTPUT
+        echo "Building architectures: $BATCH_ARCHS"
+
+    - name: Build Docker images
+      run: |
+        echo "Building Docker images..."
+        docker build -t sthenos-musl-builder -f Dockerfile.musl .
+        docker build -t sthenos-glibc-builder -f Dockerfile.glibc .
+        docker build -t sthenos-glibc-static-builder -f Dockerfile.glibc-static .
+
+    - name: Build tools for architectures
+      run: |
+        TOOLS="${{ github.event.inputs.tools }}"
+        ARCHS="${{ steps.define_batches.outputs.batch_archs }}"
+        
+        if [ -z "$ARCHS" ]; then
+          echo "No architectures to build in this batch"
+          exit 0
+        fi
+        
+        echo "Building tools: $TOOLS"
+        echo "For architectures: $ARCHS"
+        
+        for arch in $ARCHS; do
+          echo "Building for architecture: $arch"
+          
+          if [ "$TOOLS" = "all" ]; then
+            timeout 45m ./build --arch $arch || echo "Build timed out or failed for $arch"
+          else
+            for tool in $(echo $TOOLS | tr ',' ' '); do
+              echo "Building $tool for $arch"
+              timeout 15m ./build $tool --arch $arch || echo "Build timed out or failed for $tool/$arch"
+            done
+          fi
+          
+          # Clean up intermediate files to save space
+          docker system prune -f
+        done
+
+    - name: Create architecture-specific artifacts
+      run: |
+        ARCHS="${{ steps.define_batches.outputs.batch_archs }}"
+        
+        if [ -z "$ARCHS" ]; then
+          echo "No architectures built in this batch"
+          exit 0
+        fi
+        
+        mkdir -p artifacts
+        
+        for arch in $ARCHS; do
+          if [ -d "output/$arch" ]; then
+            echo "Creating artifact for $arch"
+            cd output
+            tar -czf "../artifacts/sthenos-$arch.tar.gz" "$arch/"
+            cd ..
+          fi
+        done
+        
+        # Also create preload libraries if they exist
+        if [ -d "output-preload" ]; then
+          echo "Creating preload libraries artifact"
+          tar -czf "artifacts/sthenos-preload-libs.tar.gz" output-preload/
+        fi
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: sthenos-batch-${{ matrix.arch_batch }}
+        path: artifacts/
+        retention-days: 30
+
+  create_release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.create_release == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: all-artifacts
+
+    - name: Combine artifacts
+      run: |
+        mkdir -p combined-artifacts
+        find all-artifacts -name "*.tar.gz" -exec cp {} combined-artifacts/ \;
+        ls -la combined-artifacts/
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        TOOLS="${{ github.event.inputs.tools }}"
+        ARCHS="${{ github.event.inputs.architectures }}"
+        
+        cat > release_notes.md << EOF
+        # Sthenos Embedded Toolkit Build
+        
+        **Build Date**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+        **Tools Built**: $TOOLS
+        **Architectures**: $ARCHS
+        **Commit**: ${{ github.sha }}
+        
+        ## What's Included
+        
+        Static binaries for embedded systems analysis and debugging:
+        
+        - **Analysis & Debugging**: strace, ltrace, ply, gdbserver, tcpdump, nmap
+        - **Network Tools**: socat, ncat, dropbear (SSH), can-utils  
+        - **System Tools**: bash, busybox, shell utilities
+        - **LD_PRELOAD Libraries**: libdesock, shell tools, tls-noverify
+        
+        ## Usage
+        
+        1. Download the archive for your target architecture
+        2. Extract: \`tar -xzf sthenos-<arch>.tar.gz\`
+        3. Test compatibility: \`./output/<arch>/custom\`
+        4. Use tools: \`./output/<arch>/<tool>\`
+        
+        All binaries are statically linked and require no dependencies.
+        
+        ## Architecture Testing
+        
+        Always test with the \`custom\` tool first - if it displays the banner, other tools should work.
+        If you get "Illegal instruction" errors, try different architecture variants.
+        
+        See the [Troubleshooting Guide](https://github.com/${{ github.repository }}/wiki/Troubleshooting) for help.
+        EOF
+        
+        echo "release_notes<<EOF" >> $GITHUB_OUTPUT
+        cat release_notes.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: build-${{ github.run_number }}-${{ github.sha }}
+        name: Sthenos Build ${{ github.run_number }}
+        body: ${{ steps.release_notes.outputs.release_notes }}
+        files: combined-artifacts/*
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
