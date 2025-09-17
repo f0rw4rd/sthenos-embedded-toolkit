@@ -82,7 +82,7 @@ Fast, reliable pipeline for building static debugging and analysis tools for emb
 Select your architecture → Download the tools you need.
 
 ```bash
-# Test if architecture works on your target
+# Test if binaries work on your target
 ./custom  # Should display banner if correct
 ```
 
