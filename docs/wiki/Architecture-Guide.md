@@ -1,6 +1,6 @@
 # Architecture Guide
 
-Sthenos supports 40+ architectures for cross-compilation of static debugging tools.
+Sthenos supports 50+ architectures for cross-compilation of static debugging tools.
 
 ## Supported Architectures
 
@@ -11,8 +11,10 @@ Sthenos supports 40+ architectures for cross-compilation of static debugging too
 - **arm32v5lehf** - ARMv5 little-endian, hard-float  
 - **arm32v7le** - ARMv7 little-endian, soft-float
 - **arm32v7lehf** - ARMv7 little-endian, hard-float
+- **arm32v7neon** - ARMv7 with NEON SIMD
 - **armeb** - ARM big-endian, soft-float
 - **armebhf** - ARM big-endian, hard-float
+- **armebv7hf** - ARMv7 big-endian, hard-float
 - **armel** - ARM EABI little-endian, soft-float
 - **armelhf** - ARM EABI little-endian, hard-float  
 - **armv5l** - ARMv5 little-endian (legacy naming)
@@ -24,6 +26,7 @@ Sthenos supports 40+ architectures for cross-compilation of static debugging too
 
 ### x86 Architectures
 - **x86_64** - 64-bit x86 (AMD64, Intel 64)
+- **x86_64_x32** - x86-64 with x32 ABI
 - **i486** - 32-bit x86, i486 compatible
 - **ix86le** - 32-bit x86 little-endian
 
@@ -42,19 +45,23 @@ Sthenos supports 40+ architectures for cross-compilation of static debugging too
 ### PowerPC Architectures  
 - **ppc32be** - PowerPC 32-bit big-endian, hard-float
 - **ppc32besf** - PowerPC 32-bit big-endian, soft-float
+- **ppc32le** - PowerPC 32-bit little-endian, hard-float
+- **ppc32lesf** - PowerPC 32-bit little-endian, soft-float
+- **ppc64be** - PowerPC 64-bit big-endian
 - **ppc64le** - PowerPC 64-bit little-endian
-- **powerpc64** - PowerPC 64-bit big-endian
-- **powerpcle** - PowerPC little-endian, hard-float
-- **powerpclesf** - PowerPC little-endian, soft-float
 
 ### RISC-V Architectures
 - **riscv32** - RISC-V 32-bit
 - **riscv64** - RISC-V 64-bit
 
 ### Other Architectures
+- **arcle_hs38** - Synopsys ARC HS38 little-endian
+- **loongarch64** - LoongArch 64-bit
 - **m68k** - Motorola 68000 series
+- **m68k_coldfire** - Motorola ColdFire
 - **microblaze** - Xilinx MicroBlaze big-endian
 - **microblazeel** - Xilinx MicroBlaze little-endian  
+- **nios2** - Altera Nios II
 - **or1k** - OpenRISC 1000
 - **s390x** - IBM System/390 64-bit
 - **sh2** - SuperH SH-2
@@ -65,17 +72,41 @@ Sthenos supports 40+ architectures for cross-compilation of static debugging too
 
 ## Architecture Selection Guide
 
-### Common Embedded Systems
+### Identifying Your Architecture
 
-| Device/Platform | Recommended Architecture | Notes |
-|-----------------|-------------------------|-------|
-| Raspberry Pi 1, Zero | armv6 | ARMv6 CPU |
-| Raspberry Pi 2/3/4 | arm32v7lehf or aarch64 | Pi 2/3: ARMv7, Pi 4: ARMv8 |
-| BeagleBone | arm32v7lehf | Cortex-A8 |
-| OpenWRT routers (ARM) | arm32v5le or arm32v7le | Check if hard/soft float |
-| OpenWRT routers (MIPS) | mips32be/le or mips32besf/lesf | Big/little endian, check FPU |
-| x86 embedded | i486 or x86_64 | i486 for maximum compatibility |
-| IoT microcontrollers | armv7m | Cortex-M series |
+Use the `file` command on any system binary to identify your architecture:
+
+```bash
+$ file /bin/busybox
+/bin/busybox: ELF 32-bit LSB executable, MIPS, MIPS32 version 1 (SYSV), dynamically linked...
+# → Use: mips32le (little-endian) or mips32lesf (if no FPU)
+
+$ file /bin/ls
+/bin/ls: ELF 32-bit LSB executable, ARM, EABI5 version 1 (SYSV), dynamically linked...
+# → Use: arm32v7le or arm32v5le depending on ARM version
+
+$ file /bin/sh
+/bin/sh: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked...
+# → Use: x86_64
+
+$ file /bin/cat
+/bin/cat: ELF 32-bit MSB executable, PowerPC or cisco 4500, version 1 (SYSV)...
+# → Use: ppc32be (big-endian)
+
+$ file /bin/echo  
+/bin/echo: ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV)...
+# → Use: aarch64
+```
+
+### Key Indicators
+
+- **ELF 32-bit LSB** = Little-endian, 32-bit
+- **ELF 32-bit MSB** = Big-endian, 32-bit  
+- **ELF 64-bit** = 64-bit architecture
+- **MIPS32** = Use mips32le/be variants
+- **ARM EABI5** = ARMv5 or higher
+- **ARM aarch64** = 64-bit ARM
+- **x86-64** = Standard x64/AMD64
 
 ### Floating-Point Considerations
 
@@ -99,10 +130,12 @@ Sthenos supports 40+ architectures for cross-compilation of static debugging too
 | busybox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | bash | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | socat | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| ply | ✅* | ✅ | ✅* | ✅* | ✅ | ❌ |
+| ply | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | ltrace | ✅ | ✅ | ✅ | ✅ | ❓ | ❓ |
 
-*✅ = Fully supported, ✅* = Little-endian only, ❌ = Not supported, ❓ = Untested*
+*✅ = Fully supported, ❌ = Not supported, ❓ = Untested*
+
+**Note**: ply only supports ARM and x86 architectures due to kernel BPF limitations.
 
 ## Legacy Architecture Names
 

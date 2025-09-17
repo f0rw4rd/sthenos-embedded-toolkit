@@ -17,7 +17,7 @@
                          V
 ```
 
-Fast, reliable pipeline for building static debugging and analysis tools for embedded systems across 40+ architectures.
+Fast, reliable pipeline for building static debugging and analysis tools for embedded systems across 50+ architectures.
 
 ## Quick Start
 
@@ -60,7 +60,7 @@ Fast, reliable pipeline for building static debugging and analysis tools for emb
 
 ## Supported Architectures
 
-**40+ architectures** including:
+**50+ architectures** including:
 - **ARM**: aarch64, arm32v5le, arm32v7le, armeb, armv6, armv7m, armv7r, etc.
 - **x86**: x86_64, i486, ix86le  
 - **MIPS**: mips32be/le, mips64, mipsn32, with soft-float variants
