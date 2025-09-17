@@ -77,7 +77,7 @@ Fast, reliable pipeline for building static debugging and analysis tools for emb
 ## Download Pre-built Binaries
 
 **Download binaries directly from GitHub:**
-👉 **[output folder](https://github.com/febdoctor/sthenos-embedded-toolkit/tree/main/output)**
+👉 **[output folder](https://github.com/f0rw4rd/sthenos-embedded-toolkit/tree/main/output)**
 
 Select your architecture → Download the tools you need.
 
