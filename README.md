@@ -100,13 +100,7 @@ Built binaries are placed in `output/<architecture>/<tool>` - all statically lin
 
 ## Documentation
 
-📚 **[Full Documentation](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Home.md)**
-
-- [Architecture Guide](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Architecture-Guide.md) - Complete architecture list and compatibility
-- [Build System](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Build-System.md) - Detailed build options and troubleshooting  
-- [Tools Reference](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Tools-Reference.md) - Complete tool documentation
-- [Examples](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Examples.md) - Usage examples and custom tools
-- [Troubleshooting](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Troubleshooting.md) - Common issues and solutions
+📚 **[Wiki](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Home.md)** | [Architecture Guide](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Architecture-Guide.md) | [Troubleshooting](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Troubleshooting.md)
 
 ## About
 
