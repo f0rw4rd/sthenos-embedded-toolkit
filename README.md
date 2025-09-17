@@ -74,28 +74,39 @@ Fast, reliable pipeline for building static debugging and analysis tools for emb
 - 20GB+ free disk space
 - Internet connection
 
-## Output
+## Download Pre-built Binaries
 
-Built binaries are in `output/<architecture>/<tool>` - all statically linked with no dependencies.
+**Download binaries directly from GitHub:**
+👉 **[output folder](https://github.com/febdoctor/sthenos-embedded-toolkit/tree/main/output)**
+
+Select your architecture → Download the tools you need.
 
 ```bash
-# Check build status
-find output -type f | wc -l
-ls output/*/strace
-
-# Test architecture compatibility
-./output/<arch>/custom  # Should display banner if arch is correct
+# Test if architecture works on your target
+./custom  # Should display banner if correct
 ```
+
+## Building from Source
+
+```bash
+# Build all tools for all architectures
+./build
+
+# Build specific tool for specific architecture
+./build strace --arch arm32v5le
+```
+
+Built binaries are placed in `output/<architecture>/<tool>` - all statically linked.
 
 ## Documentation
 
-📚 **[Full Documentation in Wiki](../../wiki)**
+📚 **[Full Documentation](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Home.md)**
 
-- [Architecture Guide](../../wiki/Architecture-Guide) - Complete architecture list and compatibility
-- [Build System](../../wiki/Build-System) - Detailed build options and troubleshooting  
-- [Tools Reference](../../wiki/Tools-Reference) - Complete tool documentation
-- [Examples](../../wiki/Examples) - Usage examples and custom tools
-- [Troubleshooting](../../wiki/Troubleshooting) - Common issues and solutions
+- [Architecture Guide](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Architecture-Guide.md) - Complete architecture list and compatibility
+- [Build System](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Build-System.md) - Detailed build options and troubleshooting  
+- [Tools Reference](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Tools-Reference.md) - Complete tool documentation
+- [Examples](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Examples.md) - Usage examples and custom tools
+- [Troubleshooting](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Troubleshooting.md) - Common issues and solutions
 
 ## About
 

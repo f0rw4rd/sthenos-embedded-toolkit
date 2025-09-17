@@ -1,5 +1,5 @@
-# Build outputs - now generated via CI/CD
-output/
+# Build outputs - tracked with Git LFS
+# output/  # Now tracked with LFS
 output-preload/
 output-glibc-static/
 

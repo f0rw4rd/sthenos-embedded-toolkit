@@ -1,0 +1,234 @@
+name: Binary Runtime Issue
+description: Report issues with pre-built binaries not working on target systems
+title: "[BINARY] "
+labels: ["binary", "compatibility", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Binary Runtime Issue Report
+        
+        Use this template for issues with pre-built binaries that don't work on your target system.
+        
+        ⚠️ **IMPORTANT**: You MUST test with the `custom` binary first to verify architecture compatibility.
+        If `custom` doesn't work, you likely have the wrong architecture variant.
+
+  - type: dropdown
+    id: custom-test
+    attributes:
+      label: Custom Binary Test Result
+      description: |
+        **REQUIRED**: Test with the custom binary first!
+        Run: `./output/<arch>/custom` or `./custom` (from extracted archive)
+      options:
+        - "✅ Custom binary shows banner correctly"
+        - "❌ Custom binary - Illegal instruction"
+        - "❌ Custom binary - Segmentation fault"
+        - "❌ Custom binary - No such file or directory"
+        - "❌ Custom binary - Other error"
+        - "⚠️ Did not test custom binary"
+    validations:
+      required: true
+
+  - type: textarea
+    id: custom-output
+    attributes:
+      label: Custom Binary Output
+      description: Paste the exact output from running the custom binary
+      placeholder: |
+        $ ./custom
+        [paste output here]
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: affected-tool
+    attributes:
+      label: Affected Tool
+      description: Which tool is not working? (only fill if custom binary works)
+      placeholder: "e.g., strace, busybox, tcpdump"
+
+  - type: input
+    id: architecture-used
+    attributes:
+      label: Architecture Package Used
+      description: Which architecture package did you download/use?
+      placeholder: "e.g., arm32v7le, mips32le, arm32v5lehf"
+    validations:
+      required: true
+
+  - type: textarea
+    id: cpu-info
+    attributes:
+      label: Target System CPU Information
+      description: |
+        Provide detailed CPU information from your target system.
+        Run these commands on the target and paste output:
+      value: |
+        ```
+        $ cat /proc/cpuinfo | head -20
+        [paste output]
+        
+        $ uname -a
+        [paste output]
+        
+        $ lscpu  # if available
+        [paste output]
+        
+        $ getconf LONG_BIT  # if available
+        [paste output]
+        ```
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: architecture-details
+    attributes:
+      label: Architecture Details
+      description: |
+        Provide specific architecture information.
+        For ARM systems, this is especially important.
+      value: |
+        - **CPU Architecture**: (e.g., ARMv7, MIPS32, x86)
+        - **Endianness**: (little-endian/big-endian)
+        - **Floating Point**: 
+          - [ ] Hard-float (hardware FPU)
+          - [ ] Soft-float (no FPU/software emulation)
+          - [ ] Unknown
+        - **CPU Variant/Model**: (e.g., Cortex-A7, MIPS 24Kc)
+        - **Instruction Set Extensions**: (e.g., NEON, VFPv3, Thumb-2)
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: libc-kernel
+    attributes:
+      label: System Libraries and Kernel
+      description: Information about the target system's libc and kernel
+      value: |
+        ```
+        $ ls -la /lib/libc.* /lib/ld-* 2>/dev/null
+        [paste output]
+        
+        $ ldd --version 2>/dev/null | head -5
+        [paste output]
+        
+        $ cat /proc/version
+        [paste output]
+        ```
+      render: markdown
+
+  - type: textarea
+    id: error-details
+    attributes:
+      label: Error Details
+      description: Exact error message when running the binary
+      placeholder: |
+        $ ./strace ls
+        Illegal instruction
+        
+        $ dmesg | tail  # after running the failed binary
+        [paste any relevant kernel messages]
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: execution-method
+    attributes:
+      label: Execution Method
+      description: How are you running the binary?
+      options:
+        - Direct execution on target hardware
+        - QEMU user-mode emulation
+        - Docker container
+        - chroot environment
+        - Other virtualization
+    validations:
+      required: true
+
+  - type: textarea
+    id: working-binaries
+    attributes:
+      label: Other Binaries Status
+      description: Do other binaries from the same package work?
+      placeholder: |
+        Working binaries:
+        - busybox: ✅ works
+        - bash: ✅ works
+        
+        Failed binaries:
+        - strace: ❌ illegal instruction
+        - tcpdump: ❌ segmentation fault
+
+  - type: textarea
+    id: strace-output
+    attributes:
+      label: Strace/Debug Output (if possible)
+      description: |
+        If you have a working strace or can run from another system:
+        `strace ./failing_binary 2>&1 | head -50`
+      placeholder: |
+        Paste strace or gdb output if available
+      render: shell
+
+  - type: dropdown
+    id: tried-alternatives
+    attributes:
+      label: Alternative Architectures Tested
+      description: Have you tried other architecture variants?
+      options:
+        - "Yes - other variants also fail"
+        - "Yes - found working variant"
+        - "No - only tried one architecture"
+    validations:
+      required: true
+
+  - type: input
+    id: working-arch
+    attributes:
+      label: Working Architecture (if found)
+      description: If you found a working variant, which one?
+      placeholder: "e.g., arm32v5le works but arm32v7le doesn't"
+
+  - type: textarea
+    id: target-device
+    attributes:
+      label: Target Device/System
+      description: What device/system are you running on?
+      placeholder: |
+        - Device: Raspberry Pi 3B
+        - OS: Raspbian 10
+        - Use case: Embedded system debugging
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-info
+    attributes:
+      label: Additional Information
+      description: Any other relevant details
+      placeholder: |
+        - Previous versions that worked
+        - Special system configurations
+        - Related system limitations
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have tested the `custom` binary first
+          required: true
+        - label: I have provided CPU information from `/proc/cpuinfo`
+          required: true
+        - label: I have checked if this is an architecture mismatch issue
+          required: true
+        - label: I have included the exact error messages
+          required: true
+        - label: I have checked existing issues for similar problems
+          required: true
