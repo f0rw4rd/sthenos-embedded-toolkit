@@ -17,7 +17,7 @@
                          V
 ```
 
-Fast, reliable pipeline for building static debugging and analysis tools for embedded systems across 50+ architectures.
+Fast, reliable pipeline for building static debugging and analysis tools for embedded systems across 50+ architectures. Supports both musl and glibc toolchains, with LD_PRELOAD shared libraries for runtime manipulation.
 
 ## Quick Start
 
@@ -100,10 +100,8 @@ Built binaries are placed in `output/<architecture>/<tool>` - all statically lin
 
 ## Documentation
 
-📚 **[Wiki](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Home.md)** | [Architecture Guide](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Architecture-Guide.md) | [Troubleshooting](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Troubleshooting.md)
+[Architecture Guide](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Architecture-Guide.md) | [Troubleshooting](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Troubleshooting.md)
 
 ## About
 
 Sthenos provides statically compiled debugging and analysis tools for embedded systems. Useful for system analysis, network debugging, and embedded development across diverse architectures.
-
-Inspired by [CyberDanube's medusa-embedded-toolkit](https://github.com/CyberDanube/medusa-embedded-toolkit) - while they provide binaries, we provide the complete build system.
