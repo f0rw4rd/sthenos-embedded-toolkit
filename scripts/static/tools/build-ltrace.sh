@@ -66,115 +66,28 @@ apply_patches() {
 
 build_musl_dependencies() {
     local arch="$1"
-    local toolchain_name="${CC%-gcc}"
-
-    local cflags=$(get_compile_flags "$arch" "static" "$dep_name")
-    local ldflags=$(get_link_flags "$arch" "static")
     
-    log_tool "$(date +%H:%M:%S)" "Building musl dependencies for $arch..."
+    log_tool "$(date +%H:%M:%S)" "Building musl-specific dependencies for $arch..."
     
-    # Build musl-fts
-    export FTS_DIR=$(build_musl_fts_cached "$arch") || {
+    # Build musl-fts (needed by elfutils on musl)
+    build_musl_fts_cached "$arch" >/dev/null || {
         log_tool "$(date +%H:%M:%S)" "ERROR: Failed to build musl-fts" >&2
         return 1
     }
     
-    # Build musl-obstack  
-    export OBSTACK_DIR=$(build_musl_obstack_cached "$arch") || {
+    # Build musl-obstack (needed by elfutils on musl)
+    build_musl_obstack_cached "$arch" >/dev/null || {
         log_tool "$(date +%H:%M:%S)" "ERROR: Failed to build musl-obstack" >&2
         return 1
     }
     
-    # Build argp-standalone
-    export ARGP_DIR=$(build_argp_standalone_cached "$arch") || {
+    # Build argp-standalone (needed by elfutils on musl)
+    build_argp_standalone_cached "$arch" >/dev/null || {
         log_tool "$(date +%H:%M:%S)" "ERROR: Failed to build argp-standalone" >&2
         return 1
     }
     
-    # Build zlib
-    export ZLIB_DIR=$(build_zlib_cached "$arch") || {
-        log_tool "$(date +%H:%M:%S)" "ERROR: Failed to build zlib" >&2
-        return 1
-    }
-    
-    # 4. Build elfutils with musl patches - keeping inline for troubleshooting
-    log_tool "$(date +%H:%M:%S)" "Building elfutils..."
-    cd "$BUILD_DIR"
-    
-    # First try to use cached version
-    export LIBELF_DIR="/build/deps-cache/$arch/elfutils-0.193"
-    if [ -f "$LIBELF_DIR/lib/libelf.a" ]; then
-        log_tool "$(date +%H:%M:%S)" "Using cached elfutils from $LIBELF_DIR"
-    else
-        # Build from source for troubleshooting
-        download_source "elfutils" "0.193" "https://sourceware.org/elfutils/ftp/0.193/elfutils-0.193.tar.bz2" || return 1
-        tar xf "$SOURCES_DIR/elfutils-0.193.tar.bz2"
-        cd elfutils-0.193
-        
-        # Apply Alpine patches for musl
-        if [ -d "/build/patches/elfutils" ]; then
-            for patch_file in /build/patches/elfutils/*.patch; do
-                if [ -f "$patch_file" ]; then
-                    log_tool "$(date +%H:%M:%S)" "Applying $(basename "$patch_file")..."
-                    patch -p1 < "$patch_file" || true
-                fi
-            done
-        fi
-
-        # Get host triplet
-        local host_triplet
-        host_triplet=$(${CC} -dumpmachine) || host_triplet="${toolchain_name}"
-        
-        # Get proper compile and link flags
-        local cflags=$(get_compile_flags "$arch" "static" "elfutils")
-        local ldflags=$(get_link_flags "$arch" "static")
-        
-        # Configure elfutils with minimal dependencies to avoid issues
-        CC="${CC}" \
-        CFLAGS="$cflags -I${FTS_DIR}/include -I${OBSTACK_DIR}/include -I${ARGP_DIR}/include -I${ZLIB_DIR}/include" \
-        CPPFLAGS="-I${FTS_DIR}/include -I${OBSTACK_DIR}/include -I${ARGP_DIR}/include -I${ZLIB_DIR}/include" \
-        LDFLAGS="$ldflags -L${FTS_DIR}/lib -L${OBSTACK_DIR}/lib -L${ARGP_DIR}/lib -L${ZLIB_DIR}/lib" \
-        ./configure \
-            --prefix="${LIBELF_DIR}" \
-            --disable-debuginfod \
-            --disable-libdebuginfod \
-            --disable-symbol-versioning \
-            --disable-nls \
-            --without-bzlib \
-            --without-lzma \
-            --without-zstd \
-            --disable-demangler \
-            --program-prefix="" \
-            --host="${host_triplet}" || {
-        log_tool "$(date +%H:%M:%S)" "ERROR: Configure failed" >&2       
-        cat config.log 
-        return 1
-    }
-        
-        # Build and install only what we need with the required libs
-        make -C lib -j$(nproc) LIBS="-largp -lfts -lobstack -lz" || true
-        make -C libelf -j$(nproc) LIBS="-largp -lfts -lobstack -lz"
-        
-        # Install to cache directory
-        mkdir -p "${LIBELF_DIR}/lib" "${LIBELF_DIR}/include"
-        make -C libelf install
-    fi
-    
-    # Check if libelf.a was created
-    if [ -f "${LIBELF_DIR}/lib/libelf.a" ]; then
-        log_tool "$(date +%H:%M:%S)" "libelf.a successfully created at ${LIBELF_DIR}/lib/libelf.a"
-        ls -la "${LIBELF_DIR}/lib/libelf.a"
-    else
-        log_tool "$(date +%H:%M:%S)" "ERROR: libelf.a not created!"
-        echo "Looking for libelf.a in build directory..."
-        find . -name "libelf.a" -type f 2>/dev/null
-        echo "Checking what's in ${LIBELF_DIR}/lib/:"
-        ls -la "${LIBELF_DIR}/lib/"
-        # Exit here to debug elfutils
-        exit 1
-    fi
-    
-    log_tool "$(date +%H:%M:%S)" "Dependencies built successfully"
+    log_tool "$(date +%H:%M:%S)" "Musl dependencies built successfully"
 }
 
 
@@ -207,9 +120,19 @@ configure_build() {
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")
     
-    # Alpine only needs elfutils - try minimal dependencies first
-    local include_dirs="-I${LIBELF_DIR}/include"
-    local lib_dirs="-L${LIBELF_DIR}/lib"
+    # Build dependencies to get proper paths
+    local libelf_dir=$(build_libelf_cached "$arch") || {
+        log_tool "$(date +%H:%M:%S)" "ERROR: Failed to build elfutils for configure" >&2
+        return 1
+    }
+    local zlib_dir=$(build_zlib_cached "$arch") || {
+        log_tool "$(date +%H:%M:%S)" "ERROR: Failed to build zlib for configure" >&2
+        return 1
+    }
+    
+    # Set include and lib paths from cached builds
+    local include_dirs="-I${libelf_dir}/include"
+    local lib_dirs="-L${libelf_dir}/lib"
     
     # Configure ltrace with minimal flags (Alpine-style)
     CFLAGS="$cflags $include_dirs" \
@@ -236,49 +159,66 @@ perform_build() {
     
     local arch_build_dir="${BUILD_DIR}/${TOOL_NAME}-${TOOL_VERSION}-${arch}"
     local src_dir="${arch_build_dir}/${TOOL_NAME}-${TOOL_VERSION}"
-
+    cd "$src_dir"
+    
+    # Get proper compile and link flags
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")
     
-    cd "$src_dir"
+    # Get dependency paths from cached builds
+    local elfutils_dir=$(build_libelf_cached "$arch") || {
+        log_tool "$(date +%H:%M:%S)" "ERROR: Failed to get elfutils path" >&2
+        return 1
+    }
+    local zlib_dir=$(build_zlib_cached "$arch") || {
+        log_tool "$(date +%H:%M:%S)" "ERROR: Failed to get zlib path" >&2
+        return 1
+    }
     
-    # Get dependency paths
-    local elfutils_dir="/build/deps-cache/$arch/elfutils-0.193"
-    local zlib_dir="/build/deps-cache/$arch/zlib-1.3.1"
-
+    # Set include and lib paths
+    local include_dirs="-I${elfutils_dir}/include"
+    local lib_dirs="-L${elfutils_dir}/lib"
+    
+    # Build everything but let libtool linking fail, then do manual linking
+    log_tool "$(date +%H:%M:%S)" "Compiling with CFLAGS: $cflags $include_dirs"
     CFLAGS="$cflags $include_dirs" \
-    LDFLAGS="$ldflags $lib_dirs" \   
-    make -j$(nproc) || {
-        # Standard build failed - try manual linking to avoid libtool issues
-        log_tool "$(date +%H:%M:%S)" "Standard build failed, attempting manual link..."
+    LDFLAGS="$ldflags $lib_dirs" \
+    make -j$(nproc) || true  # Let it fail at linking stage
+    
+    # Check if compilation succeeded (even if linking failed)
+    if [ ! -f "main.o" ]; then
+        log_tool "$(date +%H:%M:%S)" "ERROR: main.o not compiled" >&2
+        return 1
+    fi
+    
+    # Verify object files were built
+    if [ ! -f "main.o" ] || [ ! -f ".libs/libltrace.a" ] || [ ! -f "sysdeps/.libs/libos.a" ]; then
+        log_tool "$(date +%H:%M:%S)" "ERROR: Required object files not found" >&2
+        return 1
+    fi
+    
+    # Manual static linking with correct library order
+    # Libraries must be in dependency order: app → ltrace → os → elf → z → system
+    log_tool "$(date +%H:%M:%S)" "Performing manual static link..."
+    ${CC} $cflags $ldflags -o ltrace \
+        main.o \
+        ./.libs/libltrace.a \
+        sysdeps/.libs/libos.a \
+        ${elfutils_dir}/lib/libelf.a \
+        ${zlib_dir}/lib/libz.a \
+        -lstdc++ -lm -lpthread || {
         
-        # Check if required files exist
-        if [ ! -f "main.o" ] || [ ! -f ".libs/libltrace.a" ]; then
-            log_tool "$(date +%H:%M:%S)" "ERROR: Required object files not found" >&2
-            return 1
-        fi
-        
-        # Manual link with full paths to static libraries
-        # Include -no-pie to match the compilation flags
-        # Note: Order matters! libltrace needs libelf, libelf needs libz
-        ${CC} -static -no-pie -o ltrace main.o \
+        # Retry without C++ demangling if libstdc++ is not available
+        log_tool "$(date +%H:%M:%S)" "Retrying without C++ demangling support..."
+        ${CC} $cflags $ldflags -o ltrace \
+            main.o \
             ./.libs/libltrace.a \
             sysdeps/.libs/libos.a \
             ${elfutils_dir}/lib/libelf.a \
             ${zlib_dir}/lib/libz.a \
-            -lstdc++ -lm -lpthread || {
-            
-            # If that fails, try without C++ demangling support
-            log_tool "$(date +%H:%M:%S)" "Trying without C++ demangling..."
-            ${CC} -static -no-pie -o ltrace main.o \
-                ./.libs/libltrace.a \
-                sysdeps/.libs/libos.a \
-                ${elfutils_dir}/lib/libelf.a \
-                ${zlib_dir}/lib/libz.a \
-                -lm -lpthread || {
-                log_tool "$(date +%H:%M:%S)" "ERROR: Manual linking failed" >&2
-                return 1
-            }
+            -lm -lpthread || {
+            log_tool "$(date +%H:%M:%S)" "ERROR: Static linking failed" >&2
+            return 1
         }
     }
     

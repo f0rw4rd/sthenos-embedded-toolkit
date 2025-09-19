@@ -480,7 +480,7 @@ configure_libelf() {
         --without-bzlib \
         --without-lzma \
         --without-zstd \
-        --disable-demangler \
+        --enable-demangler \
         --program-prefix="" \
         CC="${CC}" \
         AR="${AR}"
