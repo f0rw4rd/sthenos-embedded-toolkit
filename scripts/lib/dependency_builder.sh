@@ -195,7 +195,12 @@ configure_libpcap() {
     local build_dir=$2
     local cache_dir=$3
     
-    export CFLAGS="$CFLAGS -ffunction-sections -fdata-sections"
+    # Get the proper compile flags including -fPIC
+    local cflags=$(get_compile_flags "$arch" "static" "libpcap")
+    local ldflags=$(get_link_flags "$arch" "static")
+    
+    export CFLAGS="$cflags -ffunction-sections -fdata-sections"
+    export LDFLAGS="$ldflags"
     
     ./configure \
         --host=$HOST \
@@ -251,7 +256,12 @@ configure_zlib() {
     local build_dir=$2
     local cache_dir=$3
     
-    export CFLAGS="$CFLAGS -ffunction-sections -fdata-sections"
+    # Get the proper compile flags including -fPIC
+    local cflags=$(get_compile_flags "$arch" "static" "zlib")
+    local ldflags=$(get_link_flags "$arch" "static")
+    
+    export CFLAGS="$cflags -ffunction-sections -fdata-sections"
+    export LDFLAGS="$ldflags"
     
     ./configure \
         --prefix="$cache_dir" \
@@ -298,7 +308,12 @@ configure_ncurses() {
     local build_dir=$2
     local cache_dir=$3
     
-    export CFLAGS="$CFLAGS -ffunction-sections -fdata-sections -fPIC"
+    # Get the proper compile flags including -fPIC
+    local cflags=$(get_compile_flags "$arch" "static" "ncurses")
+    local ldflags=$(get_link_flags "$arch" "static")
+    
+    export CFLAGS="$cflags -ffunction-sections -fdata-sections -fPIC"
+    export LDFLAGS="$ldflags"
     
     ./configure \
         --host=$HOST \
@@ -364,8 +379,12 @@ configure_readline() {
     local ncurses_dir
     ncurses_dir=$(build_ncurses_cached "$arch") || return 1
     
-    export CFLAGS="$CFLAGS -ffunction-sections -fdata-sections -I$ncurses_dir/include"
-    export LDFLAGS="$LDFLAGS -L$ncurses_dir/lib"
+    # Get the proper compile flags including -fPIC
+    local cflags=$(get_compile_flags "$arch" "static" "readline")
+    local ldflags=$(get_link_flags "$arch" "static")
+    
+    export CFLAGS="$cflags -ffunction-sections -fdata-sections -I$ncurses_dir/include"
+    export LDFLAGS="$ldflags -L$ncurses_dir/lib"
     
     ./configure \
         --host=$HOST \
@@ -415,12 +434,39 @@ configure_libelf() {
     local build_dir=$2
     local cache_dir=$3
     
+    # Apply Alpine patches for musl if they exist
+    if [ -d "/build/patches/elfutils" ]; then
+        for patch_file in /build/patches/elfutils/*.patch; do
+            if [ -f "$patch_file" ]; then
+                log_info "Applying $(basename "$patch_file")..." >&2
+                patch -p1 < "$patch_file" || true
+            fi
+        done
+    fi
+    
     # libelf needs zlib
     local zlib_dir
     zlib_dir=$(build_zlib_cached "$arch") || return 1
     
-    export CFLAGS="$CFLAGS -ffunction-sections -fdata-sections -I$zlib_dir/include"
-    export LDFLAGS="$LDFLAGS -L$zlib_dir/lib"
+    # For musl builds, we need the musl-specific dependencies
+    local extra_cflags=""
+    local extra_ldflags=""
+    local extra_libs=""
+    
+    if echo "${CC}" | grep -q "musl"; then
+        # Get the musl dependencies
+        local fts_dir=$(build_musl_fts_cached "$arch") || return 1
+        local obstack_dir=$(build_musl_obstack_cached "$arch") || return 1
+        local argp_dir=$(build_argp_standalone_cached "$arch") || return 1
+        
+        extra_cflags="-I$fts_dir/include -I$obstack_dir/include -I$argp_dir/include"
+        extra_ldflags="-L$fts_dir/lib -L$obstack_dir/lib -L$argp_dir/lib"
+        extra_libs="-largp -lfts -lobstack"
+    fi
+    
+    export CFLAGS="$CFLAGS -ffunction-sections -fdata-sections -fPIC -I$zlib_dir/include $extra_cflags"
+    export LDFLAGS="$LDFLAGS -L$zlib_dir/lib $extra_ldflags"
+    export LIBS="$extra_libs -lz"
     
     ./configure \
         --host=$HOST \
@@ -429,8 +475,13 @@ configure_libelf() {
         --disable-shared \
         --disable-libdebuginfod \
         --disable-debuginfod \
+        --disable-symbol-versioning \
+        --disable-nls \
         --without-bzlib \
         --without-lzma \
+        --without-zstd \
+        --disable-demangler \
+        --program-prefix="" \
         CC="${CC}" \
         AR="${AR}"
 }
@@ -440,9 +491,10 @@ build_libelf() {
     local build_dir=$2
     
     # Build exactly like the original working code but only static lib
-    make -C lib
+    # Pass LIBS through for musl dependencies
+    make -C lib LIBS="${LIBS}" || true
     # Only build the static library, not the shared one
-    make -C libelf libelf.a
+    make -C libelf libelf.a LIBS="${LIBS}"
 }
 
 install_libelf() {
@@ -457,5 +509,198 @@ install_libelf() {
     
     # Install only headers and static lib
     make -C libelf install-includeHEADERS install-libLIBRARIES
+}
+
+configure_musl_fts() {
+    local arch=$1
+    local build_dir=$2
+    local cache_dir=$3
+    
+    ./bootstrap.sh
+    
+    # Get host triplet for cross-compilation
+    local host_triplet
+    if [ -n "${CC}" ]; then
+        host_triplet=$(${CC} -dumpmachine 2>/dev/null) || host_triplet="${HOST}"
+    else
+        host_triplet="${HOST}"
+    fi
+    
+    CFLAGS="-fPIC $CFLAGS" ./configure \
+        --prefix="$cache_dir" \
+        --enable-static \
+        --disable-shared \
+        --host="${host_triplet}"
+}
+
+build_musl_fts() {
+    local arch=$1
+    local build_dir=$2
+    
+    parallel_make
+}
+
+install_musl_fts() {
+    local action=$1
+    local cache_dir=$2
+    local build_dir=$3
+    
+    if [ "$action" = "check" ]; then
+        [ -f "$cache_dir/lib/libfts.a" ]
+        return $?
+    fi
+    
+    make install
+}
+
+build_musl_fts_cached() {
+    local arch=$1
+    local version="${2:-1.2.7}"
+    
+    build_dependency_generic \
+        "musl-fts" \
+        "$version" \
+        "https://github.com/void-linux/musl-fts/archive/v$version.tar.gz" \
+        "v$version" \
+        "$arch" \
+        configure_musl_fts \
+        build_musl_fts \
+        install_musl_fts
+}
+
+configure_musl_obstack() {
+    local arch=$1
+    local build_dir=$2
+    local cache_dir=$3
+    
+    ./bootstrap.sh
+    
+    # Get host triplet for cross-compilation
+    local host_triplet
+    if [ -n "${CC}" ]; then
+        host_triplet=$(${CC} -dumpmachine 2>/dev/null) || host_triplet="${HOST}"
+    else
+        host_triplet="${HOST}"
+    fi
+    
+    CFLAGS="-fPIC $CFLAGS" ./configure \
+        --prefix="$cache_dir" \
+        --enable-static \
+        --disable-shared \
+        --host="${host_triplet}"
+}
+
+build_musl_obstack() {
+    local arch=$1
+    local build_dir=$2
+    
+    parallel_make
+}
+
+install_musl_obstack() {
+    local action=$1
+    local cache_dir=$2
+    local build_dir=$3
+    
+    if [ "$action" = "check" ]; then
+        [ -f "$cache_dir/lib/libobstack.a" ]
+        return $?
+    fi
+    
+    make install
+}
+
+build_musl_obstack_cached() {
+    local arch=$1
+    local version="${2:-1.2.3}"
+    
+    build_dependency_generic \
+        "musl-obstack" \
+        "$version" \
+        "https://github.com/void-linux/musl-obstack/archive/v$version.tar.gz" \
+        "v$version" \
+        "$arch" \
+        configure_musl_obstack \
+        build_musl_obstack \
+        install_musl_obstack
+}
+
+configure_argp_standalone() {
+    local arch=$1
+    local build_dir=$2
+    local cache_dir=$3
+    
+    # Apply Alpine patch if available
+    if [ -f "/build/patches/argp-standalone/gnu89-inline.patch" ]; then
+        patch -p1 < /build/patches/argp-standalone/gnu89-inline.patch || true
+    fi
+    
+    autoreconf -vif
+    
+    # Get host triplet for cross-compilation
+    local host_triplet
+    if [ -n "${CC}" ]; then
+        host_triplet=$(${CC} -dumpmachine 2>/dev/null) || host_triplet="${HOST}"
+    else
+        host_triplet="${HOST}"
+    fi
+    
+    CFLAGS="-fPIC $CFLAGS" ./configure \
+        --prefix="$cache_dir" \
+        --enable-static \
+        --disable-shared \
+        --host="${host_triplet}"
+}
+
+build_argp_standalone() {
+    local arch=$1
+    local build_dir=$2
+    
+    parallel_make
+}
+
+install_argp_standalone() {
+    local action=$1
+    local cache_dir=$2
+    local build_dir=$3
+    
+    if [ "$action" = "check" ]; then
+        [ -f "$cache_dir/lib/libargp.a" ]
+        return $?
+    fi
+    
+    # Manual install like Alpine does
+    install -D -m644 argp.h "$cache_dir/include/argp.h"
+    install -D -m755 libargp.a "$cache_dir/lib/libargp.a"
+}
+
+build_argp_standalone_cached() {
+    local arch=$1
+    local version="${2:-1.5.0}"
+    
+    build_dependency_generic \
+        "argp-standalone" \
+        "$version" \
+        "https://github.com/argp-standalone/argp-standalone/archive/refs/tags/$version.tar.gz" \
+        "$version" \
+        "$arch" \
+        configure_argp_standalone \
+        build_argp_standalone \
+        install_argp_standalone
+}
+
+build_libelf_cached() {
+    local arch=$1
+    local version="${2:-0.193}"
+    
+    build_dependency_generic \
+        "elfutils" \
+        "$version" \
+        "https://sourceware.org/elfutils/ftp/$version/elfutils-$version.tar.bz2" \
+        "elfutils-$version" \
+        "$arch" \
+        configure_libelf \
+        build_libelf \
+        install_libelf
 }
 

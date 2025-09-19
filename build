@@ -637,10 +637,15 @@ fi
 # Determine libc type
 LIBC_TYPE="musl"  # Default to musl
 
-# Route ltrace and custom-glibc to glibc build system
-if [ "$TOOLS" = "ltrace" ] || [ "$TOOLS" = "custom-glibc" ]; then
+# Route custom-glibc to glibc build system
+if [ "$TOOLS" = "custom-glibc" ]; then
     LIBC_TYPE="glibc"
 fi
+
+# ltrace now supports musl with Alpine patches
+# if [ "$TOOLS" = "ltrace" ]; then
+#     LIBC_TYPE="glibc"
+# fi
 
 # Also check if any architectures are glibc-only
 if [ "$ARCHITECTURES" != "all" ]; then

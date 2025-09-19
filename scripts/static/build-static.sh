@@ -402,30 +402,6 @@ run_static_builds() {
     echo "Build time: ${BUILD_MINS}m ${BUILD_SECS}s"
     echo ""
     
-    # List built artifacts
-    for arch in "${ARCHS_TO_BUILD[@]}"; do
-        local canonical_arch=$(map_arch_name "$arch")
-        
-        # Handle glibc-only architectures
-        if [[ "$canonical_arch" == *"[glibc-only]"* ]]; then
-            # Extract the actual architecture name from the glibc-only message
-            canonical_arch=$(echo "$canonical_arch" | sed 's/.*\[glibc-only\] \([^ ]*\) .*/\1/')
-        fi
-        if ls ${OUTPUT_DIR}/${canonical_arch}/* >/dev/null 2>&1; then
-            echo "${canonical_arch}:"
-            ls -lh ${OUTPUT_DIR}/${canonical_arch}/ 2>/dev/null | grep -v "^total" | grep -v "^d" | awk '{print "  " $9 " (" $5 ")"}'
-            # Check for subdirectories
-            if [ -d "${OUTPUT_DIR}/${canonical_arch}/can-utils" ] && [ "$(ls -A ${OUTPUT_DIR}/${canonical_arch}/can-utils 2>/dev/null)" ]; then
-                local count=$(ls -1 ${OUTPUT_DIR}/${canonical_arch}/can-utils | wc -l)
-                echo "  can-utils/ ($count tools)"
-            fi
-            if [ -d "${OUTPUT_DIR}/${canonical_arch}/shell" ] && [ "$(ls -A ${OUTPUT_DIR}/${canonical_arch}/shell 2>/dev/null)" ]; then
-                local count=$(ls -1 ${OUTPUT_DIR}/${canonical_arch}/shell | wc -l)
-                echo "  shell/ ($count tools)"
-            fi
-        fi
-    done
-    
     # List failures if any
     if [ $FAILED -gt 0 ]; then
         echo ""
