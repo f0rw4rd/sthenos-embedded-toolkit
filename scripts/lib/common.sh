@@ -139,7 +139,7 @@ setup_arch() {
     
     mkdir -p /build/output/$arch
     
-    log_tool "$(date +%H:%M:%S)" "Setup $arch with $toolchain_type toolchain: $toolchain_dir" >&2
+    log_tool "$arch" "Setup with $toolchain_type toolchain: $toolchain_dir" >&2
     
     # Debug output when DEBUG is set
     if [ "${DEBUG:-0}" = "1" ] || [ "${DEBUG:-0}" = "true" ]; then
@@ -177,7 +177,7 @@ download_and_extract() {
         return 1
     fi
     
-    log_tool "$(date +%H:%M:%S)" "Extracting $filename..."
+    log_tool "extract" "Extracting $filename..."
     
     local source_file="/build/sources/$filename"
     

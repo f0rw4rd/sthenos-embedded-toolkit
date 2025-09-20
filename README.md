@@ -100,7 +100,7 @@ Built binaries are placed in `output/<architecture>/<tool>` - all statically lin
 
 ## Documentation
 
-[Architecture Guide](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Architecture-Guide.md) | [Troubleshooting](https://github.com/f0rw4rd/sthenos-embedded-toolkit/blob/main/docs/wiki/Troubleshooting.md)
+[Architecture Guide](docs/Architecture-Guide.md) | [Troubleshooting](docs/Troubleshooting.md)
 
 ## About
 

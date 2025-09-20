@@ -170,7 +170,7 @@ show_banner() {
         echo "            )           \\     /          ("
         echo "          /|\\          ) \\___/ (         /|\\"
         echo "        /  |  \\       ( /\\   /\\ )      /  |  \\"
-        echo "      /    |    \\      \\ \` | ' /     /    |    \\"
+        echo "      /    |    \\      \\ \x | O /     /    |    \\"
         echo "+----/-----|-----O------\\  |  /----O------|------\\--------+"
         echo "|                 '^'      V     '^'                      |"
         echo "|               STHENOS EMBEDDED TOOLKIT                  |"
@@ -527,8 +527,8 @@ if [ "$CHECK_MISSING" != true ] && [ -n "$ARCHITECTURES" ] && [ "$ARCHITECTURES"
     fi
 fi
 
-# Show banner for interactive builds
-if [ "$INTERACTIVE" != true ] && [ "$CLEAN" != true ] && [ "$DOWNLOAD_ONLY" != true ]; then
+# Show banner for interactive builds (skip if --shell is used)
+if [ "$INTERACTIVE" != true ] && [ "$CLEAN" != true ] && [ "$DOWNLOAD_ONLY" != true ] && [ "$SHELL_CMD" != true ]; then
     show_banner
 fi
 

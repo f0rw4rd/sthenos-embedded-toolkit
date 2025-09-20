@@ -146,6 +146,72 @@ $ file /bin/echo
 
 **Note**: ply only supports ARM and x86 architectures due to kernel BPF limitations.
 
+## Binary Compatibility
+
+The following diagram shows which architectures can run binaries compiled for other architectures (upward compatibility):
+
+```mermaid
+graph TB
+    %% x86 family
+    subgraph x86["x86 Family"]
+        i486 --> x86_64["x86_64<br/>(AMD64)"]
+        ix86le --> x86_64
+        x86_64_x32["x32 ABI"] --> x86_64
+    end
+    
+    %% ARM LE family
+    subgraph armle["ARM Little Endian"]
+        arm32v7le["armv7"] --> aarch64["aarch64"]
+        arm32v7lehf["armv7hf"] --> aarch64
+        arm32v7neon["armv7<br/>neon"] --> aarch64
+        armv7m --> aarch64
+        armv7r --> aarch64
+        armelhf["armhf"] --> aarch64
+    end
+    
+    %% ARM BE family
+    subgraph armbe["ARM Big Endian"]
+        armebv7hf["armv7hf"] --> aarch64_be["aarch64_be"]
+    end
+    
+    %% MIPS BE family
+    subgraph mipsbe["MIPS Big Endian"]
+        mips32be --> mips64
+        mips64n32["n32"] --> mips64
+        mipsn32 --> mips64
+    end
+    
+    %% MIPS LE family
+    subgraph mipsle["MIPS Little Endian"]
+        mips32le --> mips64le
+        mips64n32el["n32el"] --> mips64le
+        mipsn32el --> mips64le
+    end
+    
+    %% PowerPC family
+    subgraph ppc["PowerPC"]
+        ppc32be --> ppc64be
+    end
+    
+    %% Styling
+    classDef arch64 fill:#9cf,stroke:#333,stroke-width:2px
+    classDef arch32 fill:#fc9,stroke:#333,stroke-width:2px
+    classDef subgraphStyle fill:#f9f9f9,stroke:#666,stroke-width:1px
+    
+    class x86_64,aarch64,aarch64_be,mips64,mips64le,ppc64be arch64
+    class i486,ix86le,arm32v7le,arm32v7lehf,arm32v7neon,armv7m,armv7r,armelhf,armebv7hf,mips32be,mips32le,ppc32be,x86_64_x32,mips64n32,mips64n32el,mipsn32,mipsn32el arch32
+    class x86,armle,armbe,mipsbe,mipsle,ppc subgraphStyle
+```
+
+### Compatibility Notes
+
+- **x86 Family**: Has the strongest backward compatibility. x86_64 systems can run 32-bit x86 binaries (i486, ix86le)
+- **ARM Family**: Only ARMv7 binaries are compatible with ARMv8/aarch64. ARMv5/v6 binaries are NOT compatible
+- **MIPS Family**: Strict endianness matching required. Soft-float variants are NOT compatible with hard-float systems
+- **PowerPC Family**: Only hard-float big-endian variants have compatibility path
+- **RISC-V**: No backward compatibility between riscv32 and riscv64
+- **Soft-float variants**: Generally NOT compatible with hard-float systems
+
 ## Legacy Architecture Names
 
 Some architectures have legacy names that map to canonical names:

@@ -17,7 +17,7 @@ get_ltrace_arch() {
     local arch="$1"
     case "$arch" in
         x86_64|i*86|ix86le) echo "x86" ;;
-        arm*v5*|arm*v7*|armeb|armv6) echo "arm" ;;
+        arm*v5*|arm*v7*|armeb|armebhf|armv6) echo "arm" ;;
         aarch64) echo "UNSUPPORTED" ;;  # Little-endian not supported
         aarch64_be) echo "aarch64" ;;   # Big-endian maps to aarch64
         mips*) echo "mips" ;;
@@ -65,7 +65,7 @@ get_host_triplet() {
 build_ltrace() {
     local arch="$1"
     
-    log_tool "$(date +%H:%M:%S)" "Starting ltrace build for $arch..."
+    log_tool "$arch" "Starting ltrace build..."
     
     # Setup paths
     local arch_build_dir="${BUILD_DIR}/${TOOL_NAME}-${TOOL_VERSION}-${arch}"
@@ -74,21 +74,21 @@ build_ltrace() {
     
     # Check if already built (unless SKIP_IF_EXISTS is explicitly set to false)
     if [ "${SKIP_IF_EXISTS:-true}" = "true" ] && [ -f "$output_file" ]; then
-        log_tool "$(date +%H:%M:%S)" "ltrace already built for $arch, skipping..."
+        log_tool "$arch" "ltrace already built, skipping..."
         return 0
     fi
     
     # Download and extract
     mkdir -p "$arch_build_dir"
     if ! download_and_extract "$LTRACE_URL" "$arch_build_dir" 0; then
-        log_tool "$(date +%H:%M:%S)" "ERROR: Failed to download ltrace" >&2
+        log_tool "$arch" "ERROR: Failed to download ltrace" >&2
         return 1
     fi
     
     # Check architecture support
     local ltrace_arch=$(get_ltrace_arch "$arch")
     if [ "$ltrace_arch" = "UNSUPPORTED" ] || [ ! -d "$src_dir/sysdeps/linux-gnu/$ltrace_arch" ]; then
-        log_tool "$(date +%H:%M:%S)" "ERROR: Architecture $arch not supported by ltrace" >&2
+        log_tool "$arch" "ERROR: Architecture not supported by ltrace" >&2
         return 1
     fi
     
@@ -99,24 +99,24 @@ build_ltrace() {
     if [ -d "$patches_dir" ]; then
         for patch_file in "$patches_dir"/*.patch; do
             [ -f "$patch_file" ] || continue
-            log_tool "$(date +%H:%M:%S)" "Applying $(basename "$patch_file")..."
+            log_tool "$arch" "Applying $(basename "$patch_file")..."
             patch -p1 < "$patch_file" || true
         done
     fi
     
     # Generate configure if needed
     if [ ! -f "configure" ]; then
-        log_tool "$(date +%H:%M:%S)" "Generating configure script..."
+        log_tool "$arch" "Generating configure script..."
         mkdir -p config/m4 2>/dev/null || true
         autoreconf -fiv || {
-            log_tool "$(date +%H:%M:%S)" "ERROR: Failed to generate configure" >&2
+            log_tool "$arch" "ERROR: Failed to generate configure" >&2
             return 1
         }
     fi
     
     # Build musl dependencies if needed
     if echo "${CC}" | grep -q "musl"; then
-        log_tool "$(date +%H:%M:%S)" "Building musl dependencies..."
+        log_tool "$arch" "Building musl dependencies..."
         build_musl_fts_cached "$arch" >/dev/null || return 1
         build_musl_obstack_cached "$arch" >/dev/null || return 1
         build_argp_standalone_cached "$arch" >/dev/null || return 1
@@ -132,7 +132,7 @@ build_ltrace() {
     local host_triplet=$(get_host_triplet)
     
     # Configure
-    log_tool "$(date +%H:%M:%S)" "Configuring ltrace..."
+    log_tool "$arch" "Configuring ltrace..."
     CFLAGS="$cflags -I${elfutils_dir}/include" \
     LDFLAGS="$ldflags -L${elfutils_dir}/lib" \
     ./configure \
@@ -141,47 +141,52 @@ build_ltrace() {
         --sysconfdir=/etc \
         --disable-werror \
         CC="${CC}" AR="${AR}" STRIP="${STRIP}" || {
-        log_tool "$(date +%H:%M:%S)" "ERROR: Configure failed" >&2
+        log_tool "$arch" "ERROR: Configure failed" >&2
         return 1
     }
     
     # Build (allow linking to fail, we'll do it manually)
-    log_tool "$(date +%H:%M:%S)" "Building ltrace..."
+    log_tool "$arch" "Building ltrace..."
     CFLAGS="$cflags -I${elfutils_dir}/include" \
     LDFLAGS="$ldflags -L${elfutils_dir}/lib" \
     make -j$(nproc) || true
     
     # Check if object files exist
     if [ ! -f "main.o" ] || [ ! -f ".libs/libltrace.a" ] || [ ! -f "sysdeps/.libs/libos.a" ]; then
-        log_tool "$(date +%H:%M:%S)" "ERROR: Compilation failed" >&2
+        log_tool "$arch" "ERROR: Compilation failed" >&2
         return 1
     fi
     
     # Manual static linking
-    log_tool "$(date +%H:%M:%S)" "Linking ltrace..."
+    log_tool "$arch" "Linking ltrace..."
+    
+    # Find C++ support libraries for demangling
+    local cxx_libs=""
+    local toolchain_prefix="${CC%-gcc}"
+    if [ -f "/build/toolchains-musl/${toolchain_prefix}-cross/${toolchain_prefix}/lib/libsupc++.a" ]; then
+        cxx_libs="/build/toolchains-musl/${toolchain_prefix}-cross/${toolchain_prefix}/lib/libsupc++.a"
+    elif [ -f "/build/toolchains/${toolchain_prefix}/${toolchain_prefix}/lib/libsupc++.a" ]; then
+        cxx_libs="/build/toolchains/${toolchain_prefix}/${toolchain_prefix}/lib/libsupc++.a"
+    fi
+    
     ${CC} $cflags $ldflags -o ltrace \
         main.o \
         ./.libs/libltrace.a \
         sysdeps/.libs/libos.a \
         ${elfutils_dir}/lib/libelf.a \
         ${zlib_dir}/lib/libz.a \
+        $cxx_libs \
         -lm -lpthread || {
-        # Retry with libstdc++ for C++ demangling if available
-        ${CC} $cflags $ldflags -o ltrace \
-            main.o \
-            ./.libs/libltrace.a \
-            sysdeps/.libs/libos.a \
-            ${elfutils_dir}/lib/libelf.a \
-            ${zlib_dir}/lib/libz.a \
-            -lstdc++ -lm -lpthread || return 1
-    }
+            log_tool "$arch" "ERROR: Failed to build"
+            exit 1
+        }
     
     # Install
     mkdir -p "${OUTPUT_DIR}/${arch}"
     ${STRIP} ltrace
     cp ltrace "$output_file"
     
-    log_tool "$(date +%H:%M:%S)" "ltrace built successfully for $arch"
+    log_tool "$arch" "SUCCESS: ltrace built successfully"
     return 0
 }
 

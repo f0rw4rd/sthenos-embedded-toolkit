@@ -37,7 +37,7 @@ build_ply() {
     local build_dir="/tmp/build"
     local arch_build_dir="${build_dir}/${build_name}"
     
-    log_tool "Building ${TOOL_NAME} ${TOOL_VERSION} for ${arch}..."
+    log_tool "$arch" "Building ${TOOL_NAME} ${TOOL_VERSION}..."
     
     # Set up build directory
     rm -rf "$arch_build_dir"
@@ -70,7 +70,7 @@ download_ply_source() {
     local filename="${TOOL_NAME}-${TOOL_VERSION}.tar.gz"
     
     download_source "$TOOL_NAME" "$TOOL_VERSION" "$url" || {
-        log_tool "$(date +%H:%M:%S)" "ERROR: Failed to download source" >&2
+        log_tool "$arch" "ERROR: Failed to download source" >&2
         return 1
     }
     
@@ -90,9 +90,9 @@ build_tool() {
     # We'll copy it to the build directory for the musl toolchain to use
     
     # Extract source
-    log_tool "$(date +%H:%M:%S)" "Extracting ${TOOL_NAME} source..."
+    log_tool "$arch" "Extracting ${TOOL_NAME} source..."
     tar xzf "${SOURCES_DIR}/${TOOL_NAME}-${TOOL_VERSION}.tar.gz" || {
-        log_tool "$(date +%H:%M:%S)" "ERROR: Failed to extract source" >&2
+        log_tool "$arch" "ERROR: Failed to extract source" >&2
         return 1
     }
     
@@ -100,18 +100,18 @@ build_tool() {
     
     # Ubuntu has BSD queue.h in /usr/include/sys/queue.h by default
     # Copy to local include for musl toolchain
-    log_tool "$(date +%H:%M:%S)" "Setting up BSD queue.h for ply..."
+    log_tool "$arch" "Setting up BSD queue.h for ply..."
     mkdir -p include/sys
     
     if [ -f /usr/include/sys/queue.h ]; then
-        log_tool "$(date +%H:%M:%S)" "Using Ubuntu's BSD queue.h from /usr/include/sys/"
+        log_tool "$arch" "Using Ubuntu's BSD queue.h from /usr/include/sys/"
         cp /usr/include/sys/queue.h include/sys/queue.h
     else
         # Fallback: download standalone version if not found
-        log_tool "$(date +%H:%M:%S)" "WARNING: System queue.h not found, downloading standalone version..."
+        log_tool "$arch" "WARNING: System queue.h not found, downloading standalone version..."
         wget -q -O include/sys/queue.h \
             "https://raw.githubusercontent.com/freebsd/freebsd-src/main/sys/sys/queue.h" || {
-            log_tool "$(date +%H:%M:%S)" "ERROR: Failed to download queue.h"
+            log_tool "$arch" "ERROR: Failed to download queue.h"
             return 1
         }
     fi
@@ -156,15 +156,15 @@ EOF
     cflags="$cflags -I$(pwd)/include"
     
     # Generate configure script
-    log_tool "$(date +%H:%M:%S)" "Running autogen.sh..."
+    log_tool "$arch" "Running autogen.sh..."
     # Run in a clean environment to avoid git warnings
     env -i PATH="/usr/bin:/bin" ./autogen.sh || {
-        log_tool "$(date +%H:%M:%S)" "ERROR: autogen.sh failed" >&2
+        log_tool "$arch" "ERROR: autogen.sh failed" >&2
         return 1
     }
     
     # Configure
-    log_tool "$(date +%H:%M:%S)" "Configuring ${TOOL_NAME} for ${arch}..."
+    log_tool "$arch" "Configuring ${TOOL_NAME}..."
     
     # Set up cross-compilation environment
     local host_triplet=""
@@ -193,7 +193,7 @@ EOF
         riscv32)     host_triplet="riscv32-linux-musl" ;;
         riscv64)     host_triplet="riscv64-linux-musl" ;;
         *)
-            log_tool "$(date +%H:%M:%S)" "WARNING: Unknown architecture ${arch}, using generic host"
+            log_tool "$arch" "WARNING: Unknown architecture, using generic host"
             host_triplet="${arch}-linux-musl"
             ;;
     esac
@@ -208,14 +208,14 @@ EOF
         --enable-static \
         --disable-shared \
         || {
-        log_tool "$(date +%H:%M:%S)" "ERROR: Configure failed" >&2
+        log_tool "$arch" "ERROR: Configure failed" >&2
         return 1
     }
     
     # Build
-    log_tool "$(date +%H:%M:%S)" "Building ${TOOL_NAME}..."
+    log_tool "$arch" "Building ${TOOL_NAME}..."
     make -j$(nproc) LDFLAGS="$ldflags" AM_LDFLAGS="-all-static" || {
-        log_tool "$(date +%H:%M:%S)" "ERROR: Build failed" >&2
+        log_tool "$arch" "ERROR: Build failed" >&2
         return 1
     }
     
@@ -229,7 +229,7 @@ install_tool() {
     
     cd "${build_dir}/${TOOL_NAME}-${TOOL_VERSION}"
     
-    log_tool "$(date +%H:%M:%S)" "Installing ${TOOL_NAME} to ${install_dir}..."
+    log_tool "$arch" "Installing ${TOOL_NAME} to ${install_dir}..."
     
     # Find and install the binary
     local ply_binary=""
@@ -245,32 +245,32 @@ install_tool() {
     fi
     
     if [ -z "$ply_binary" ] || [ ! -f "$ply_binary" ]; then
-        log_tool "$(date +%H:%M:%S)" "ERROR: Could not find ply binary" >&2
+        log_tool "$arch" "ERROR: Could not find ply binary" >&2
         find . -name "ply*" -type f | head -20
         return 1
     fi
     
     install -D -m 755 "$ply_binary" "${install_dir}/ply" || {
-        log_tool "$(date +%H:%M:%S)" "ERROR: Failed to install ply binary from $ply_binary" >&2
+        log_tool "$arch" "ERROR: Failed to install ply binary from $ply_binary" >&2
         return 1
     }
     
     # Verify it's statically linked
     if ! file "${install_dir}/ply" | grep -qE "(statically linked|static-pie linked)"; then
-        log_tool "$(date +%H:%M:%S)" "ERROR: Binary is not statically linked!" >&2
+        log_tool "$arch" "ERROR: Binary is not statically linked!" >&2
         ldd "${install_dir}/ply" || true
         return 1
     fi
     
     # Strip the binary
-    log_tool "$(date +%H:%M:%S)" "Stripping ${TOOL_NAME} binary..."
+    log_tool "$arch" "Stripping ${TOOL_NAME} binary..."
     "${STRIP}" "${install_dir}/ply" || {
-        log_tool "$(date +%H:%M:%S)" "WARNING: Failed to strip binary" >&2
+        log_tool "$arch" "WARNING: Failed to strip binary" >&2
     }
     
     # Show final size
     local final_size=$(ls -lh "${install_dir}/ply" | awk '{print $5}')
-    log_tool "$(date +%H:%M:%S)" "Final binary size: $final_size"
+    log_tool "$arch" "Final binary size: $final_size"
     
     return 0
 }
@@ -305,9 +305,9 @@ main() {
             # powerpc.c - little endian PowerPC 64
             ;;
         *)
-            log_tool "$(date +%H:%M:%S)" "ERROR: Architecture $arch is not supported by ply" >&2
-            log_tool "$(date +%H:%M:%S)" "Supported: x86_64, aarch64 (LE), arm32 (LE), mips (LE), riscv32/64, ppc64le" >&2
-            log_tool "$(date +%H:%M:%S)" "Note: Big-endian variants are not confirmed to work" >&2
+            log_tool "$arch" "ERROR: Architecture is not supported by ply" >&2
+            log_tool "$arch" "Supported: x86_64, aarch64 (LE), arm32 (LE), mips (LE), riscv32/64, ppc64le" >&2
+            log_tool "$arch" "Note: Big-endian variants are not confirmed to work" >&2
             return 1
             ;;
     esac

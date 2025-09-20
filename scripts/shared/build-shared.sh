@@ -228,7 +228,7 @@ for lib in $LIBS_TO_BUILD; do
     
     for arch in $ARCHS_TO_BUILD; do
         COUNT=$((COUNT + 1))
-        log_tool "[$COUNT/$TOTAL]" "Building $lib for $arch..."
+        log_tool "$arch" "[$COUNT/$TOTAL] Building $lib..."
         
         # Special handling for libraries with dedicated build scripts
         if [ "$lib" = "tls-noverify" ] || [ "$lib" = "libdesock" ]; then
@@ -239,26 +239,26 @@ for lib in $LIBS_TO_BUILD; do
                 build_tls_noverify "$arch" "$LOG_ENABLED" "$DEBUG"
                 ret=$?
                 if [ $ret -eq 0 ]; then
-                    log_tool "$COUNT/$TOTAL" "SUCCESS: Built $lib for $arch with ${LIBC_TYPE}"
+                    log_tool "$arch" "[$COUNT/$TOTAL] SUCCESS: Built $lib with ${LIBC_TYPE}"
                 elif [ $ret -eq 2 ]; then
                     # Skipped - architecture doesn't support this libc
                     log_debug "Skipped $lib for $arch with ${LIBC_TYPE} (unsupported)"
                     SKIPPED=$((SKIPPED + 1))
                 else
-                    log_tool "$COUNT/$TOTAL" "ERROR: Failed to build $lib for $arch with ${LIBC_TYPE}"
+                    log_tool "$arch" "[$COUNT/$TOTAL] ERROR: Failed to build $lib with ${LIBC_TYPE}"
                     FAILED=$((FAILED + 1))
                 fi
             elif [ "$lib" = "libdesock" ]; then
                 build_libdesock "$arch" "$LOG_ENABLED" "$DEBUG"
                 ret=$?
                 if [ $ret -eq 0 ]; then
-                    log_tool "$COUNT/$TOTAL" "SUCCESS: Built $lib for $arch with ${LIBC_TYPE}"
+                    log_tool "$arch" "[$COUNT/$TOTAL] SUCCESS: Built $lib with ${LIBC_TYPE}"
                 elif [ $ret -eq 2 ]; then
                     # Skipped - architecture doesn't support this libc
                     log_debug "Skipped $lib for $arch with ${LIBC_TYPE} (unsupported)"
                     SKIPPED=$((SKIPPED + 1))
                 else
-                    log_tool "$COUNT/$TOTAL" "ERROR: Failed to build $lib for $arch with ${LIBC_TYPE}"
+                    log_tool "$arch" "[$COUNT/$TOTAL] ERROR: Failed to build $lib with ${LIBC_TYPE}"
                     FAILED=$((FAILED + 1))
                 fi
             fi
@@ -267,13 +267,13 @@ for lib in $LIBS_TO_BUILD; do
             build_shared_library "$lib" "$arch" "$LOG_ENABLED" "$DEBUG"
             ret=$?
             if [ $ret -eq 0 ]; then
-                log_tool "$COUNT/$TOTAL" "SUCCESS: Built $lib for $arch with ${LIBC_TYPE}"
+                log_tool "$arch" "[$COUNT/$TOTAL] SUCCESS: Built $lib with ${LIBC_TYPE}"
             elif [ $ret -eq 2 ]; then
                 # Skipped - architecture doesn't support this libc
                 log_debug "Skipped $lib for $arch with ${LIBC_TYPE} (unsupported)"
                 SKIPPED=$((SKIPPED + 1))
             else
-                log_tool "$COUNT/$TOTAL" "ERROR: Failed to build $lib for $arch with ${LIBC_TYPE}"
+                log_tool "$arch" "[$COUNT/$TOTAL] ERROR: Failed to build $lib with ${LIBC_TYPE}"
                 FAILED=$((FAILED + 1))
             fi
         fi
