@@ -9,32 +9,69 @@ source "$LIB_DIR/common.sh"
 source "$LIB_DIR/dependency_builder.sh"
 
 TOOL_NAME="ltrace"
-TOOL_VERSION="0.7.3"
-LTRACE_URL="http://www.ltrace.org/ltrace_0.7.3.orig.tar.bz2"
+TOOL_VERSION="0.8.1"
+LTRACE_URL="https://gitlab.com/cespedes/ltrace/-/archive/0.8.1/ltrace-0.8.1.tar.gz"
 
 download_ltrace_source() {
     local arch="$1"
     
     log_tool "$(date +%H:%M:%S)" "Starting ltrace download for $arch..."
     
-    source "$(dirname "${BASH_SOURCE[0]}")/../../lib/build_helpers.sh"
-    
-    if ! download_source "$TOOL_NAME" "$TOOL_VERSION" "$LTRACE_URL"; then
-        log_tool "$(date +%H:%M:%S)" "ERROR: Failed to download ltrace source" >&2
-        return 1
-    fi
-    
-    log_tool "$(date +%H:%M:%S)" "Extracting ltrace source for $arch..."
     local arch_build_dir="${BUILD_DIR}/${TOOL_NAME}-${TOOL_VERSION}-${arch}"
     mkdir -p "$arch_build_dir"
-    cd "$arch_build_dir"
     
-    tar xjf "/build/sources/ltrace_0.7.3.orig.tar.bz2"
-    
-    if [ ! -d "${TOOL_NAME}-${TOOL_VERSION}" ]; then
-        log_tool "$(date +%H:%M:%S)" "ERROR: Failed to extract ltrace source" >&2
+    if ! download_and_extract "$LTRACE_URL" "$arch_build_dir" 0; then
+        log_tool "$(date +%H:%M:%S)" "ERROR: Failed to download and extract ltrace source" >&2
         return 1
     fi
+    
+    if [ ! -d "$arch_build_dir/${TOOL_NAME}-${TOOL_VERSION}" ]; then
+        log_tool "$(date +%H:%M:%S)" "ERROR: Expected directory ${TOOL_NAME}-${TOOL_VERSION} not found after extraction" >&2
+        return 1
+    fi
+    
+    log_tool "$(date +%H:%M:%S)" "Successfully downloaded and extracted ltrace source for $arch"
+}
+
+check_architecture_support() {
+    local arch="$1"
+    local src_dir="$2"
+    
+    log_tool "$(date +%H:%M:%S)" "Checking architecture support for $arch..."
+    
+    # Map architecture to ltrace sysdeps directory name
+    local ltrace_arch=""
+    case "$arch" in
+        x86_64) ltrace_arch="x86" ;;
+        i*86|ix86le) ltrace_arch="x86" ;;
+        arm*v5*|arm*v7*|armeb|armv6) ltrace_arch="arm" ;;
+        aarch64*) ltrace_arch="aarch64" ;;  # Note: aarch64 doesn't exist in 0.7.3
+        mips*) ltrace_arch="mips" ;;
+        ppc*|powerpc*) ltrace_arch="ppc" ;;
+        s390*) ltrace_arch="s390" ;;
+        sparc*) ltrace_arch="sparc" ;;
+        alpha*) ltrace_arch="alpha" ;;
+        ia64*) ltrace_arch="ia64" ;;
+        m68k*) ltrace_arch="m68k" ;;
+        cris*) ltrace_arch="cris" ;;
+        *)
+            log_tool "$(date +%H:%M:%S)" "WARNING: Unknown architecture mapping for $arch" >&2
+            ltrace_arch="$arch"
+            ;;
+    esac
+    
+    # Check if the architecture directory exists
+    if [ ! -d "$src_dir/sysdeps/linux-gnu/$ltrace_arch" ]; then
+        log_tool "$(date +%H:%M:%S)" "ERROR: Architecture $arch (mapped to $ltrace_arch) is not supported by ltrace $TOOL_VERSION" >&2
+        log_tool "$(date +%H:%M:%S)" "Available architectures in ltrace $TOOL_VERSION:" >&2
+        ls -1 "$src_dir/sysdeps/linux-gnu/" 2>/dev/null | grep -v Makefile | while read -r dir; do
+            [ -d "$src_dir/sysdeps/linux-gnu/$dir" ] && log_tool "$(date +%H:%M:%S)" "  - $dir" >&2
+        done
+        return 1
+    fi
+    
+    log_tool "$(date +%H:%M:%S)" "Architecture $arch (mapped to $ltrace_arch) is supported"
+    return 0
 }
 
 apply_patches() {
@@ -56,12 +93,31 @@ apply_patches() {
         done
     fi
     
-    # Run autoreconf to regenerate configure (following Alpine)
-    log_tool "$(date +%H:%M:%S)" "Running autoreconf..."
-    aclocal && autoconf && automake --add-missing --force || {
-        log_tool "$(date +%H:%M:%S)" "ERROR: autoreconf failed" >&2
-        return 1
-    }
+    # Run autoreconf to regenerate configure if configure.ac was modified by patches
+    if [ -f "configure.ac" ]; then
+        log_tool "$(date +%H:%M:%S)" "Running autoreconf..."
+        
+        # Create missing directories if needed
+        mkdir -p config/m4 2>/dev/null || true
+        
+        # Try full autoreconf first
+        if ! autoreconf -fiv 2>/dev/null; then
+            # If that fails, try minimal approach
+            log_tool "$(date +%H:%M:%S)" "Trying minimal autoreconf approach..."
+            if ! (libtoolize --force --copy 2>/dev/null || glibtoolize --force --copy 2>/dev/null || true) && \
+                 aclocal && \
+                 autoheader && \
+                 automake --add-missing --force-missing --copy 2>/dev/null && \
+                 autoconf; then
+                log_tool "$(date +%H:%M:%S)" "WARNING: autoreconf had issues, trying to continue with existing configure" >&2
+                # If configure exists, we can try to continue
+                if [ ! -f "configure" ]; then
+                    log_tool "$(date +%H:%M:%S)" "ERROR: No configure script available" >&2
+                    return 1
+                fi
+            fi
+        fi
+    fi
 }
 
 build_musl_dependencies() {
@@ -183,7 +239,7 @@ perform_build() {
     log_tool "$(date +%H:%M:%S)" "Compiling with CFLAGS: $cflags $include_dirs"
     CFLAGS="$cflags $include_dirs" \
     LDFLAGS="$ldflags $lib_dirs" \
-    make -j$(nproc) || true  # Let it fail at linking stage
+    make v=1 -j$(nproc) || true  # Let it fail at linking stage
     
     # Check if compilation succeeded (even if linking failed)
     if [ ! -f "main.o" ]; then
@@ -254,6 +310,12 @@ build_ltrace() {
     
     local arch_build_dir="${BUILD_DIR}/${TOOL_NAME}-${TOOL_VERSION}-${arch}"
     local src_dir="${arch_build_dir}/${TOOL_NAME}-${TOOL_VERSION}"
+    
+    # Check if architecture is supported
+    if ! check_architecture_support "$arch" "$src_dir"; then
+        log_tool "$(date +%H:%M:%S)" "ERROR: Skipping build - architecture not supported" >&2
+        return 1
+    fi
     
     # Apply patches
     if ! apply_patches "$src_dir"; then

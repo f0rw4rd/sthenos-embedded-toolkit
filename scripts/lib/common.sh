@@ -139,20 +139,20 @@ setup_arch() {
     
     mkdir -p /build/output/$arch
     
-    log_tool "$(date +%H:%M:%S)" "Setup $arch with $toolchain_type toolchain: $toolchain_dir"
+    log_tool "$(date +%H:%M:%S)" "Setup $arch with $toolchain_type toolchain: $toolchain_dir" >&2
     
     # Debug output when DEBUG is set
     if [ "${DEBUG:-0}" = "1" ] || [ "${DEBUG:-0}" = "true" ]; then
-        log "[DEBUG] Toolchain Configuration for $arch:"
-        log "  CROSS_COMPILE: $CROSS_COMPILE"
-        log "  CC: $CC"
-        log "  CXX: $CXX"
-        log "  AR: $AR"
-        log "  LD: $LD"
-        log "  PATH: $PATH"
-        log "  Toolchain Dir: $toolchain_dir"
-        log "  Toolchain Type: $toolchain_type"
-        which "${CROSS_COMPILE}gcc" 2>/dev/null && log "  Compiler Path: $(which ${CROSS_COMPILE}gcc)"
+        log "[DEBUG] Toolchain Configuration for $arch:" >&2
+        log "  CROSS_COMPILE: $CROSS_COMPILE" >&2
+        log "  CC: $CC" >&2
+        log "  CXX: $CXX" >&2
+        log "  AR: $AR" >&2
+        log "  LD: $LD" >&2
+        log "  PATH: $PATH" >&2
+        log "  Toolchain Dir: $toolchain_dir" >&2
+        log "  Toolchain Type: $toolchain_type" >&2
+        which "${CROSS_COMPILE}gcc" >/dev/null 2>&1 && log "  Compiler Path: $(which ${CROSS_COMPILE}gcc)" >&2
     fi
     
     return 0

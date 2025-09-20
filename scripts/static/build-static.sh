@@ -14,6 +14,9 @@ source "$BASE_DIR/scripts/lib/common.sh"
 source "$BASE_DIR/scripts/lib/supported.sh"
 source "$BASE_DIR/scripts/lib/arch_map.sh"
 source "$BASE_DIR/scripts/lib/core/arch_helper.sh"
+source "$BASE_DIR/scripts/lib/logging.sh"
+source "$BASE_DIR/scripts/lib/core/compile_flags.sh"
+source "$BASE_DIR/scripts/lib/tools.sh"
 
 # Setup architecture for glibc builds
 setup_arch_glibc() {
@@ -73,12 +76,6 @@ build_glibc_tool() {
     export DEPS_PREFIX="${DEPS_PREFIX}/${canonical_arch}"
     mkdir -p "${DEPS_PREFIX}/lib" "${DEPS_PREFIX}/include"
     
-    # Get the correct build script from TOOL_SCRIPTS mapping
-    # Need to source common.sh if not already loaded
-    if [ -z "${TOOL_SCRIPTS+x}" ]; then
-        source "$BASE_DIR/scripts/lib/common.sh"
-    fi
-    
     local build_script="${TOOL_SCRIPTS[$tool]}"
     if [ -z "$build_script" ]; then
         log_error "No build script mapping found for tool: $tool"
@@ -120,8 +117,7 @@ do_static_build() {
     
     # Auto-switch to glibc for architectures that don't support musl
     if [ "$libc" = "musl" ]; then
-        # Check if this architecture has musl support
-        source "$BASE_DIR/scripts/lib/core/arch_helper.sh"
+        # Check if this architecture has musl support        
         if ! arch_supports_musl "$arch"; then
             if arch_supports_glibc "$arch"; then
                 # Switch to glibc for this architecture since musl is not available
@@ -161,18 +157,6 @@ do_static_build() {
         fi
         return $result
     else
-        # Ensure musl build system is available
-        if ! type build_tool >/dev/null 2>&1; then
-            # Source required musl libraries in correct order
-            # tools.sh now sets its own SCRIPT_DIR
-            source "$BASE_DIR/scripts/lib/common.sh"
-            source "$BASE_DIR/scripts/lib/logging.sh"
-            source "$BASE_DIR/scripts/lib/arch_map.sh"
-            source "$BASE_DIR/scripts/lib/core/compile_flags.sh"
-            source "$BASE_DIR/scripts/lib/supported.sh"
-            source "$BASE_DIR/scripts/lib/tools.sh"
-        fi
-        
         if ! setup_arch "$canonical_arch"; then
             log_error "Failed to setup architecture"
             return 1
@@ -222,13 +206,6 @@ configure_static_build_env() {
         SOURCES_DIR="$SOURCES_DIR"
         DEPS_PREFIX="$GLIBC_DEPS_PREFIX"
         LOGS_DIR="$LOGS_DIR"
-        
-        # Source standard build flags (works for both musl and glibc)
-        source "$BASE_DIR/scripts/lib/core/compile_flags.sh"
-        
-        # Source tool definitions to get all available tools
-        source "$BASE_DIR/scripts/lib/common.sh"
-        
         # All tools can be built with glibc (most tools support both musl and glibc)
         # Get supported tools from TOOL_SCRIPTS array keys
         SUPPORTED_STATIC_TOOLS=($(printf '%s\n' "${!TOOL_SCRIPTS[@]}" | sort))
@@ -246,15 +223,6 @@ configure_static_build_env() {
         SOURCES_DIR="$SOURCES_DIR"
         DEPS_PREFIX="$MUSL_DEPS_PREFIX"
         LOGS_DIR="$LOGS_DIR"
-        
-        # Source musl-specific configurations in correct order
-        # tools.sh now sets its own SCRIPT_DIR
-        source "$BASE_DIR/scripts/lib/common.sh"
-        source "$BASE_DIR/scripts/lib/logging.sh"
-        source "$BASE_DIR/scripts/lib/arch_map.sh"
-        source "$BASE_DIR/scripts/lib/core/compile_flags.sh"
-        source "$BASE_DIR/scripts/lib/supported.sh"
-        source "$BASE_DIR/scripts/lib/tools.sh"
         
         # Get supported tools from TOOL_SCRIPTS array keys
         SUPPORTED_STATIC_TOOLS=($(printf '%s\n' "${!TOOL_SCRIPTS[@]}" | sort))

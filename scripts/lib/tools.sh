@@ -23,15 +23,17 @@ build_tool() {
     fi    
     
     local script="${TOOL_SCRIPTS[$tool]}"
-
-    
     
     if [ ! -f "$script" ]; then
         echo "Build script not found for $tool: $script"
         return 1
     fi
     
-    "$script" "$arch"
+    if [ -n "$DEBUG" ]; then
+        bash -x "$script" "$arch"
+    else
+        bash "$script" "$arch"
+    fi   
 }
 
 export -f parallel_make

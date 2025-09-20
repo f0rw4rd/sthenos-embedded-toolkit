@@ -344,6 +344,9 @@ for i in $(seq 1 $#); do
         --clean)
             CLEAN=true
             ;;
+        --clear-deps)
+            CLEAR_DEPS=true
+            ;;
         -i|--interactive)
             INTERACTIVE=true
             ;;
@@ -433,6 +436,7 @@ for i in $(seq 1 $#); do
             echo "  --shell CMD      Run command in container with build environment"
             echo "  --download       Download sources and toolchains only"
             echo "  --clean          Clean output and logs directories"
+            echo "  --clear-deps     Clear dependencies cache volume"
             echo "  --check-missing [ARCH]  Check for missing binaries (optionally filter by arch)"
             echo "  --libc TYPE      For shared libs: glibc (default) or musl"
             echo ""
@@ -549,6 +553,14 @@ if [ "$CLEAN" = true ]; then
     run_in_container "rm -rf /build/output/* /build/logs/* && echo 'Clean complete!'"
     echo "- Removed all files from output/"
     echo "- Removed all files from logs/"
+    exit 0
+fi
+
+# Handle clear-deps mode
+if [ "$CLEAR_DEPS" = true ]; then
+    echo "Clearing dependencies cache..."
+    # Simply remove the deps-cache directory inside the container
+    run_in_container "rm -rf /build/deps-cache/* && echo '✓ Cleared dependencies cache' || echo '✗ Failed to clear dependencies cache'"
     exit 0
 fi
 
@@ -690,7 +702,7 @@ if [ "$SHAREDLIB_MODE" != true ]; then
     run_in_container "
         source /build/scripts/lib/toolchain_manager.sh
         source /build/scripts/static/build-static.sh
-        
+
         # First build static tools
         run_static_builds '$TOOLS' '$ARCHITECTURES' '$LIBC_TYPE' '$MODE' '$LOG_ENABLED' '$DEBUG'
         
