@@ -1,0 +1,15 @@
+--- a/sysdeps/linux-gnu/mips/trace.c
++++ b/sysdeps/linux-gnu/mips/trace.c
+@@ -32,6 +32,12 @@
+ #include <signal.h>
+ #include <asm/unistd.h>
+ 
++/* Define sigreturn syscalls if not available (N32/N64 ABIs) */
++#ifndef __NR_sigreturn
++#define __NR_sigreturn -1
++#define __NR_rt_sigreturn 5211
++#endif
++
+ #include "backend.h"
+ #include "breakpoint.h"
+ #include "debug.h"

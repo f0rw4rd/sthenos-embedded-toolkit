@@ -1,0 +1,35 @@
+--- a/sysdeps/linux-gnu/ppc/regs.c
++++ b/sysdeps/linux-gnu/ppc/regs.c
+@@ -27,7 +27,6 @@
+ #include <sys/ptrace.h>
+ #include <asm/ptrace.h>
+ #include <errno.h>
+-#include <error.h>
+ 
+ #include "proc.h"
+ #include "common.h"
+@@ -51,7 +50,7 @@ void
+ set_instruction_pointer(struct process *proc, void *addr)
+ {
+ 	if (ptrace(PTRACE_POKEUSER, proc->pid, sizeof(long)*PT_NIP, addr) != 0)
+-		error(0, errno, "set_instruction_pointer");
++		report_global_error("set_instruction_pointer: %s", strerror(errno));
+ }
+ 
+ void *
+--- a/sysdeps/linux-gnu/ppc/trace.c
++++ b/sysdeps/linux-gnu/ppc/trace.c
+@@ -29,6 +29,13 @@
+ #include <elf.h>
+ #include <errno.h>
+ 
++/* Define PPC register offsets if not defined (musl compatibility) */
++#ifndef PT_R0
++#define PT_R0 0
++#define PT_ORIG_R3 34
++#define PT_TRAP 40
++#endif
++
+ #include "backend.h"
+ #include "breakpoint.h"
+ #include "proc.h"
