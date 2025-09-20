@@ -17,7 +17,7 @@ get_ltrace_arch() {
     local arch="$1"
     case "$arch" in
         x86_64|i*86|ix86le) echo "x86" ;;
-        arm*v5*|arm*v7*|armeb|armebhf|armv6) echo "arm" ;;
+        arm*v5*|arm*v6*|arm*v7*|armeb|armebhf|armel) echo "arm" ;;
         aarch64) echo "UNSUPPORTED" ;;  # Little-endian not supported
         aarch64_be) echo "aarch64" ;;   # Big-endian maps to aarch64
         mips*) echo "mips" ;;
@@ -92,7 +92,10 @@ build_ltrace() {
         return 1
     fi
     
-    cd "$src_dir"
+    cd "$src_dir" || {
+        log_tool "$arch" "ERROR: Could not enter source directory: $src_dir" >&2
+        return 1
+    }
     
     # Apply patches
     local patches_dir="/build/patches/ltrace"
@@ -133,6 +136,10 @@ build_ltrace() {
     
     # Configure
     log_tool "$arch" "Configuring ltrace..."
+    cd "$src_dir" || {
+        log_tool "$arch" "ERROR: Lost source directory before configure" >&2
+        return 1
+    }
     CFLAGS="$cflags -I${elfutils_dir}/include" \
     LDFLAGS="$ldflags -L${elfutils_dir}/lib" \
     ./configure \
