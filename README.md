@@ -105,3 +105,9 @@ Built binaries are placed in `output/<architecture>/<tool>` - all statically lin
 ## About
 
 Sthenos provides statically compiled debugging and analysis tools for embedded systems. Useful for system analysis, network debugging, and embedded development across diverse architectures.
+
+## Contributions and Support
+
+Pull requests are welcome for bug fixes, new tools, and architecture support. Donations are welcome to buy more hardware for testing.
+
+☕ **[Support on Ko-fi](https://ko-fi.com/f0rw4rd)**
