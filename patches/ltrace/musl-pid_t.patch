@@ -1,0 +1,10 @@
+--- a/proc.h
++++ b/proc.h
+@@ -27,6 +27,7 @@
+ #include "config.h"
+ 
+ #include <sys/time.h>
++#include <sys/types.h>
+ #include <stdint.h>
+ 
+ #if defined(HAVE_LIBDW)

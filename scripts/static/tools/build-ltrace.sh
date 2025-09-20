@@ -45,7 +45,13 @@ check_architecture_support() {
         x86_64) ltrace_arch="x86" ;;
         i*86|ix86le) ltrace_arch="x86" ;;
         arm*v5*|arm*v7*|armeb|armv6) ltrace_arch="arm" ;;
-        aarch64*) ltrace_arch="aarch64" ;;  # Note: aarch64 doesn't exist in 0.7.3
+        aarch64) 
+            # ltrace 0.8.1's aarch64 directory is actually for big-endian
+            # Little-endian aarch64 is not supported
+            log_tool "$(date +%H:%M:%S)" "WARNING: ltrace 0.8.1 does not support little-endian aarch64" >&2
+            ltrace_arch="UNSUPPORTED"
+            ;;
+        aarch64_be) ltrace_arch="aarch64" ;;  # aarch64 directory in ltrace is for big-endian
         mips*) ltrace_arch="mips" ;;
         ppc*|powerpc*) ltrace_arch="ppc" ;;
         s390*) ltrace_arch="s390" ;;
@@ -54,6 +60,10 @@ check_architecture_support() {
         ia64*) ltrace_arch="ia64" ;;
         m68k*) ltrace_arch="m68k" ;;
         cris*) ltrace_arch="cris" ;;
+        riscv64*) ltrace_arch="riscv64" ;;  # Added for 0.8.1
+        loongarch*) ltrace_arch="loongarch" ;;  # Added for 0.8.1
+        xtensa*) ltrace_arch="xtensa" ;;  # Added for 0.8.1
+        metag*) ltrace_arch="metag" ;;  # Added for 0.8.1
         *)
             log_tool "$(date +%H:%M:%S)" "WARNING: Unknown architecture mapping for $arch" >&2
             ltrace_arch="$arch"
@@ -164,9 +174,17 @@ configure_build() {
         case "${toolchain_name}" in
             x86_64-*) host_triplet="x86_64-pc-linux-gnu" ;;
             i*86-*) host_triplet="i686-pc-linux-gnu" ;;
-            arm-*) host_triplet="arm-linux-gnueabi" ;;
-            aarch64-*) host_triplet="aarch64-linux-gnu" ;;
-            *) host_triplet="${toolchain_name%-musl}-linux-gnu" ;;
+            arm-*|armv*) host_triplet="arm-linux-gnueabi" ;;  # All ARM variants including armv7l
+            aarch64_be-*) host_triplet="aarch64-linux-gnu" ;;  # Big-endian aarch64 uses aarch64 triplet
+            aarch64-*) host_triplet="aarch64-linux-gnu" ;;  # Little-endian (though not supported)
+            mips-*) host_triplet="mips-linux-gnu" ;;
+            mipsel-*) host_triplet="mipsel-linux-gnu" ;;
+            *) 
+                # Remove musl suffix variations and add -linux-gnu
+                local base_arch="${toolchain_name%-linux-musl*}"
+                base_arch="${base_arch%-musl*}"
+                host_triplet="${base_arch}-linux-gnu"
+                ;;
         esac
     else
         host_triplet="${toolchain_name}"
