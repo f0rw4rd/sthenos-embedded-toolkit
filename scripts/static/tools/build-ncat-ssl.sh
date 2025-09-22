@@ -8,8 +8,9 @@ source "$LIB_DIR/dependency_builder.sh"
 source "$LIB_DIR/core/compile_flags.sh"
 source "$LIB_DIR/build_helpers.sh"
 
-NMAP_VERSION="${NMAP_VERSION:-7.94}"
+NMAP_VERSION="${NMAP_VERSION:-7.98}"
 NMAP_URL="https://nmap.org/dist/nmap-${NMAP_VERSION}.tar.bz2"
+NMAP_SHA512="14e13689d1276f70efc8c905e8eb0a15970f4312c2ef86d8d97e9df11319735e7f7cd73f728f69cf43d27a078ef5ac1e0f39cd119d8cb9262060c42606c6cab3"
 
 build_ncat_ssl() {
     local arch=$1
@@ -18,8 +19,7 @@ build_ncat_ssl() {
     
     if check_binary_exists "$arch" "ncat-ssl"; then
         return 0
-    fi
-    
+    fi    
     
     setup_toolchain_for_arch "$arch" || return 1
     
@@ -28,7 +28,7 @@ build_ncat_ssl() {
         return 1
     }
     
-    download_source "nmap" "$NMAP_VERSION" "$NMAP_URL" || return 1
+    download_source "nmap" "$NMAP_VERSION" "$NMAP_URL" "$NMAP_SHA512" || return 1
     
     cd "$build_dir"
     

@@ -17,6 +17,7 @@ build_dependency_generic() {
     local configure_func=$6
     local build_func=$7
     local install_func=$8
+    local expected_sha512=$9
     
     local cache_dir="$DEPS_CACHE_DIR/$arch/$dep_name-$version"
     
@@ -29,14 +30,13 @@ build_dependency_generic() {
     log_info "Building $dep_name $version for $arch..." >&2
     
     setup_toolchain_for_arch "$arch" || return 1
-    download_source "$dep_name" "$version" "$url" "$extract_name" || return 1
+    download_source "$dep_name" "$version" "$url" "$expected_sha512" "$extract_name" || return 1
     
     local build_dir="/tmp/$dep_name-build-${arch}-$$"
     mkdir -p "$build_dir" "$cache_dir"
     
     cd "$build_dir"
     
-    # Detect archive format from downloaded file
     local archive_file=""
     if [ -f "/build/sources/$extract_name.tar.gz" ]; then
         archive_file="/build/sources/$extract_name.tar.gz"
@@ -45,7 +45,6 @@ build_dependency_generic() {
     elif [ -f "/build/sources/$extract_name.tar.xz" ]; then
         archive_file="/build/sources/$extract_name.tar.xz"
     else
-        # Try to find by URL filename
         local url_file=$(basename "$url")
         if [ -f "/build/sources/$url_file" ]; then
             archive_file="/build/sources/$url_file"
@@ -64,8 +63,6 @@ build_dependency_generic() {
     local cflags=$(get_compile_flags "$arch" "static" "$dep_name")
     local ldflags=$(get_link_flags "$arch" "static")
     
-    # Only call export_cross_compiler for musl builds
-    # For glibc, the variables are already set by setup_toolchain_for_arch
     if [ "$LIBC_TYPE" != "glibc" ]; then
         export_cross_compiler "$CROSS_COMPILE"
     fi
@@ -127,9 +124,12 @@ configure_openssl() {
         *) openssl_target="linux-generic32" ;;
     esac
     
-    # OpenSSL's Configure script uses CROSS_COMPILE env var if set,
-    # but we already have the full compiler paths in CC/CXX
     unset CROSS_COMPILE
+    
+    # For s390x, we need to use linux64-s390x instead of linux-s390x
+    if [ "$arch" = "s390x" ]; then
+        openssl_target="linux64-s390x"
+    fi
     
     ./Configure \
         --prefix="$cache_dir" \
@@ -151,7 +151,7 @@ configure_openssl() {
         no-weak-ssl-ciphers \
         -static \
         -ffunction-sections -fdata-sections \
-        "$openssl_cflags"
+        $openssl_cflags
 }
 
 build_openssl() {
@@ -177,7 +177,8 @@ install_openssl() {
 
 build_openssl_cached() {
     local arch=$1
-    local version="${2:-1.1.1w}"
+    local version="1.1.1w"
+    local sha512="b4c625fe56a4e690b57b6a011a225ad0cb3af54bd8fb67af77b5eceac55cc7191291d96a660c5b568a08a2fbf62b4612818e7cca1bb95b2b6b4fc649b0552b6d"
     
     build_dependency_generic \
         "openssl" \
@@ -187,7 +188,8 @@ build_openssl_cached() {
         "$arch" \
         configure_openssl \
         build_openssl \
-        install_openssl
+        install_openssl \
+        "$sha512"
 }
 
 configure_libpcap() {
@@ -195,7 +197,6 @@ configure_libpcap() {
     local build_dir=$2
     local cache_dir=$3
     
-    # Get the proper compile flags including -fPIC
     local cflags=$(get_compile_flags "$arch" "static" "libpcap")
     local ldflags=$(get_link_flags "$arch" "static")
     
@@ -238,7 +239,8 @@ install_libpcap() {
 
 build_libpcap_cached() {
     local arch=$1
-    local version="${2:-1.10.4}"
+    local version="1.10.4"
+    local sha512="1f6d6ddd07dae7c557054cb246437ecdaf39d579592a5a6bdf1144eea6cb5a779ac4ca647cfed11ec1b0bb18efc63b845444e497070bacefaaed19a5787ae5e1"
     
     build_dependency_generic \
         "libpcap" \
@@ -248,7 +250,8 @@ build_libpcap_cached() {
         "$arch" \
         configure_libpcap \
         build_libpcap \
-        install_libpcap
+        install_libpcap \
+        "$sha512"
 }
 
 configure_zlib() {
@@ -256,7 +259,6 @@ configure_zlib() {
     local build_dir=$2
     local cache_dir=$3
     
-    # Get the proper compile flags including -fPIC
     local cflags=$(get_compile_flags "$arch" "static" "zlib")
     local ldflags=$(get_link_flags "$arch" "static")
     
@@ -290,7 +292,8 @@ install_zlib() {
 
 build_zlib_cached() {
     local arch=$1
-    local version="${2:-1.3.1}"
+    local version="1.3.1"
+    local sha512="580677aad97093829090d4b605ac81c50327e74a6c2de0b85dd2e8525553f3ddde17556ea46f8f007f89e435493c9a20bc997d1ef1c1c2c23274528e3c46b94f"
     
     build_dependency_generic \
         "zlib" \
@@ -300,7 +303,8 @@ build_zlib_cached() {
         "$arch" \
         configure_zlib \
         build_zlib \
-        install_zlib
+        install_zlib \
+        "$sha512"
 }
 
 configure_ncurses() {
@@ -308,7 +312,6 @@ configure_ncurses() {
     local build_dir=$2
     local cache_dir=$3
     
-    # Get the proper compile flags including -fPIC
     local cflags=$(get_compile_flags "$arch" "static" "ncurses")
     local ldflags=$(get_link_flags "$arch" "static")
     
@@ -358,7 +361,8 @@ install_ncurses() {
 
 build_ncurses_cached() {
     local arch=$1
-    local version="${2:-6.4}"
+    local version="6.4"
+    local sha512="1c2efff87a82a57e57b0c60023c87bae93f6718114c8f9dc010d4c21119a2f7576d0225dab5f0a227c2cfc6fb6bdbd62728e407f35fce5bf351bb50cf9e0fd34"
     
     build_dependency_generic \
         "ncurses" \
@@ -368,7 +372,8 @@ build_ncurses_cached() {
         "$arch" \
         configure_ncurses \
         build_ncurses \
-        install_ncurses
+        install_ncurses \
+        "$sha512"
 }
 
 configure_readline() {
@@ -379,7 +384,6 @@ configure_readline() {
     local ncurses_dir
     ncurses_dir=$(build_ncurses_cached "$arch") || return 1
     
-    # Get the proper compile flags including -fPIC
     local cflags=$(get_compile_flags "$arch" "static" "readline")
     local ldflags=$(get_link_flags "$arch" "static")
     
@@ -416,7 +420,8 @@ install_readline() {
 
 build_readline_cached() {
     local arch=$1
-    local version="${2:-8.2}"
+    local version="8.2"
+    local sha512="0a451d459146bfdeecc9cdd94bda6a6416d3e93abd80885a40b334312f16eb890f8618a27ca26868cebbddf1224983e631b1cbc002c1a4d1cd0d65fba9fea49a"
     
     build_dependency_generic \
         "readline" \
@@ -426,7 +431,8 @@ build_readline_cached() {
         "$arch" \
         configure_readline \
         build_readline \
-        install_readline
+        install_readline \
+        "$sha512"
 }
 
 configure_libelf() {
@@ -434,7 +440,6 @@ configure_libelf() {
     local build_dir=$2
     local cache_dir=$3
     
-    # Apply Alpine patches for musl if they exist
     if [ -d "/build/patches/elfutils" ]; then
         for patch_file in /build/patches/elfutils/*.patch; do
             if [ -f "$patch_file" ]; then
@@ -444,17 +449,14 @@ configure_libelf() {
         done
     fi
     
-    # libelf needs zlib
     local zlib_dir
     zlib_dir=$(build_zlib_cached "$arch") || return 1
     
-    # For musl builds, we need the musl-specific dependencies
     local extra_cflags=""
     local extra_ldflags=""
     local extra_libs=""
     
     if echo "${CC}" | grep -q "musl"; then
-        # Get the musl dependencies
         local fts_dir=$(build_musl_fts_cached "$arch") || return 1
         local obstack_dir=$(build_musl_obstack_cached "$arch") || return 1
         local argp_dir=$(build_argp_standalone_cached "$arch") || return 1
@@ -490,10 +492,7 @@ build_libelf() {
     local arch=$1
     local build_dir=$2
     
-    # Build exactly like the original working code but only static lib
-    # Pass LIBS through for musl dependencies
     make -C lib LIBS="${LIBS}" || true
-    # Only build the static library, not the shared one
     make -C libelf libelf.a LIBS="${LIBS}"
 }
 
@@ -507,7 +506,6 @@ install_libelf() {
         return $?
     fi
     
-    # Install only headers and static lib
     make -C libelf install-includeHEADERS install-libLIBRARIES
 }
 
@@ -518,7 +516,6 @@ configure_musl_fts() {
     
     ./bootstrap.sh
     
-    # Get host triplet for cross-compilation
     local host_triplet
     if [ -n "${CC}" ]; then
         host_triplet=$(${CC} -dumpmachine 2>/dev/null) || host_triplet="${HOST}"
@@ -555,7 +552,8 @@ install_musl_fts() {
 
 build_musl_fts_cached() {
     local arch=$1
-    local version="${2:-1.2.7}"
+    local version="1.2.7"
+    local sha512="949f73b9406b06bd8712c721b4ec89afcb37d4eaef5666cccf3712242d3a57fc0acf3ca994934e0f57c1e92f40521a9370132a21eb6d1957415a83c76bf20feb"
     
     build_dependency_generic \
         "musl-fts" \
@@ -565,7 +563,8 @@ build_musl_fts_cached() {
         "$arch" \
         configure_musl_fts \
         build_musl_fts \
-        install_musl_fts
+        install_musl_fts \
+        "$sha512"
 }
 
 configure_musl_obstack() {
@@ -575,7 +574,6 @@ configure_musl_obstack() {
     
     ./bootstrap.sh
     
-    # Get host triplet for cross-compilation
     local host_triplet
     if [ -n "${CC}" ]; then
         host_triplet=$(${CC} -dumpmachine 2>/dev/null) || host_triplet="${HOST}"
@@ -612,7 +610,8 @@ install_musl_obstack() {
 
 build_musl_obstack_cached() {
     local arch=$1
-    local version="${2:-1.2.3}"
+    local version="1.2.3"
+    local sha512="b2bbed19c4ab2714ca794bdcb1a84fad1af964e884d4f3bbe91c9937ca089d92b8472cb05ebe998a9f5c85cb922b9b458db91eff29077bd099942e1ce18e16cc"
     
     build_dependency_generic \
         "musl-obstack" \
@@ -622,7 +621,8 @@ build_musl_obstack_cached() {
         "$arch" \
         configure_musl_obstack \
         build_musl_obstack \
-        install_musl_obstack
+        install_musl_obstack \
+        "$sha512"
 }
 
 configure_argp_standalone() {
@@ -630,14 +630,12 @@ configure_argp_standalone() {
     local build_dir=$2
     local cache_dir=$3
     
-    # Apply Alpine patch if available
     if [ -f "/build/patches/argp-standalone/gnu89-inline.patch" ]; then
         patch -p1 < /build/patches/argp-standalone/gnu89-inline.patch || true
     fi
     
     autoreconf -vif
     
-    # Get host triplet for cross-compilation
     local host_triplet
     if [ -n "${CC}" ]; then
         host_triplet=$(${CC} -dumpmachine 2>/dev/null) || host_triplet="${HOST}"
@@ -669,14 +667,14 @@ install_argp_standalone() {
         return $?
     fi
     
-    # Manual install like Alpine does
     install -D -m644 argp.h "$cache_dir/include/argp.h"
     install -D -m755 libargp.a "$cache_dir/lib/libargp.a"
 }
 
 build_argp_standalone_cached() {
     local arch=$1
-    local version="${2:-1.5.0}"
+    local version="1.5.0"
+    local sha512="fa2eb61ea00f7a13385e5c1e579dd88471d6ba3a13b6353e924fe71914b90b40688b42a9f1789bc246e03417fee1788b1990753cda8c8d4a544e85f26b63f9e2"
     
     build_dependency_generic \
         "argp-standalone" \
@@ -686,12 +684,14 @@ build_argp_standalone_cached() {
         "$arch" \
         configure_argp_standalone \
         build_argp_standalone \
-        install_argp_standalone
+        install_argp_standalone \
+        "$sha512"
 }
 
 build_libelf_cached() {
     local arch=$1
-    local version="${2:-0.193}"
+    local version="0.193"
+    local sha512="557e328e3de0d2a69d09c15a9333f705f3233584e2c6a7d3ce855d06a12dc129e69168d6be64082803630397bd64e1660a8b5324d4f162d17922e10ddb367d76"
     
     build_dependency_generic \
         "elfutils" \
@@ -701,6 +701,6 @@ build_libelf_cached() {
         "$arch" \
         configure_libelf \
         build_libelf \
-        install_libelf
+        install_libelf \
+        "$sha512"
 }
-

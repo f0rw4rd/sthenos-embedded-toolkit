@@ -1,18 +1,16 @@
 #!/bin/bash
 set -euo pipefail
 
-# Tool information
 TOOL_NAME="ply"
 TOOL_VERSION="2.4.0"
+PLY_SHA512="3f4afe8d88d889fdd74f772a349e27b23fcdda194dc0af1482e75406fd0cd886cd663d673104fad8a501b92241be4f2d2f373f467313d5736aa18dc3033b9279"
 
-# Source common functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="$(cd "$SCRIPT_DIR/../../lib" 2>/dev/null && pwd)" || LIB_DIR="/build/scripts/lib"
 source "$LIB_DIR/common.sh"
 source "$LIB_DIR/build_helpers.sh"
 source "$LIB_DIR/core/compile_flags.sh"
 
-# Set up directories
 SOURCES_DIR="${SOURCES_DIR:-/build/sources}"
 OUTPUT_DIR="${OUTPUT_DIR:-/build/output}"
 
@@ -27,7 +25,6 @@ get_version() {
 build_ply() {
     local arch="$1"
     
-    # Set up architecture environment
     setup_toolchain_for_arch "$arch" || {
         log_tool_error "$TOOL_NAME" "Failed to setup architecture: $arch"
         return 1
@@ -39,14 +36,12 @@ build_ply() {
     
     log_tool "$arch" "Building ${TOOL_NAME} ${TOOL_VERSION}..."
     
-    # Set up build directory
     rm -rf "$arch_build_dir"
     mkdir -p "$arch_build_dir"
     
-    # Set up error handling
     trap "cleanup_build_dir '$arch_build_dir'" EXIT
     
-    download_ply_source "$arch" || return 1
+    download_ply_source "$arch" "$arch_build_dir" || return 1
     
     if ! build_tool "$arch" "$arch_build_dir"; then
         log_tool_error "$TOOL_NAME" "Build failed for $arch"
@@ -66,13 +61,13 @@ build_ply() {
 
 download_ply_source() {
     local arch="$1"
+    local build_dir="$2"
     local url=$(get_source_url)
-    local filename="${TOOL_NAME}-${TOOL_VERSION}.tar.gz"
     
-    download_source "$TOOL_NAME" "$TOOL_VERSION" "$url" || {
-        log_tool "$arch" "ERROR: Failed to download source" >&2
+    if ! download_and_extract "$url" "$build_dir" 1 "$PLY_SHA512"; then
+        log_tool "$arch" "ERROR: Failed to download and extract source" >&2
         return 1
-    }
+    fi
     
     return 0
 }
@@ -83,23 +78,11 @@ build_tool() {
     
     cd "${build_dir}"
     
-    # Get proper flags from centralized configuration
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")
     
-    # We'll copy it to the build directory for the musl toolchain to use
+    # Already in the extracted directory from download_and_extract with strip_components=1
     
-    # Extract source
-    log_tool "$arch" "Extracting ${TOOL_NAME} source..."
-    tar xzf "${SOURCES_DIR}/${TOOL_NAME}-${TOOL_VERSION}.tar.gz" || {
-        log_tool "$arch" "ERROR: Failed to extract source" >&2
-        return 1
-    }
-    
-    cd "${TOOL_NAME}-${TOOL_VERSION}"
-    
-    # Ubuntu has BSD queue.h in /usr/include/sys/queue.h by default
-    # Copy to local include for musl toolchain
     log_tool "$arch" "Setting up BSD queue.h for ply..."
     mkdir -p include/sys
     
@@ -107,66 +90,55 @@ build_tool() {
         log_tool "$arch" "Using Ubuntu's BSD queue.h from /usr/include/sys/"
         cp /usr/include/sys/queue.h include/sys/queue.h
     else
-        # Fallback: download standalone version if not found
         log_tool "$arch" "WARNING: System queue.h not found, downloading standalone version..."
-        wget -q -O include/sys/queue.h \
-            "https://raw.githubusercontent.com/freebsd/freebsd-src/main/sys/sys/queue.h" || {
+        local queue_url="https://raw.githubusercontent.com/freebsd/freebsd-src/main/sys/sys/queue.h"
+        local queue_sha512="cc94b138de601c9e1804384496e691ad400ef1351c0b81f8d24d77449d7f17b11c5fefe0fb1c302e927e824f9e5c89895f7594336f2bf81aed7c40740d3e9ae6"
+        
+        if wget -q -O include/sys/queue.h.tmp "$queue_url"; then
+            local actual_sha512=$(sha512sum include/sys/queue.h.tmp | cut -d' ' -f1)
+            if [ "$actual_sha512" = "$queue_sha512" ]; then
+                mv include/sys/queue.h.tmp include/sys/queue.h
+                log_tool "$arch" "queue.h downloaded and verified"
+            else
+                log_tool "$arch" "ERROR: queue.h checksum verification failed"
+                rm -f include/sys/queue.h.tmp
+                return 1
+            fi
+        else
             log_tool "$arch" "ERROR: Failed to download queue.h"
             return 1
-        }
+        fi
     fi
     
-    # Create a minimal cdefs.h for queue.h compatibility
-    # Ubuntu's queue.h may need some cdefs.h macros
     cat > include/sys/cdefs.h << 'EOF'
-#ifndef _SYS_CDEFS_H_
-#define _SYS_CDEFS_H_
 
 /* Minimal cdefs.h for BSD queue.h compatibility */
-#ifndef __BEGIN_DECLS
-#ifdef __cplusplus
-#define __BEGIN_DECLS extern "C" {
-#define __END_DECLS }
-#else
-#define __BEGIN_DECLS
-#define __END_DECLS
-#endif
-#endif
 
-#ifndef __unused
-#define __unused __attribute__((__unused__))
-#endif
 
-#ifndef __dead2
-#define __dead2 __attribute__((__noreturn__))
-#endif
 
-#ifndef __pure2
-#define __pure2 __attribute__((__pure__))
-#endif
 
-#ifndef __restrict
-#define __restrict restrict
-#endif
 
-#endif /* _SYS_CDEFS_H_ */
 EOF
     
-    # Add local include directory
     cflags="$cflags -I$(pwd)/include"
     
-    # Generate configure script
-    log_tool "$arch" "Running autogen.sh..."
-    # Run in a clean environment to avoid git warnings
-    env -i PATH="/usr/bin:/bin" ./autogen.sh || {
-        log_tool "$arch" "ERROR: autogen.sh failed" >&2
+    # Check if we need to run autogen.sh or if configure already exists
+    if [ -f configure ]; then
+        log_tool "$arch" "Using pre-generated configure script..."
+    elif [ -f autogen.sh ]; then
+        log_tool "$arch" "Running autogen.sh..."
+        chmod +x autogen.sh
+        ./autogen.sh || {
+            log_tool "$arch" "ERROR: autogen.sh failed" >&2
+            return 1
+        }
+    else
+        log_tool "$arch" "ERROR: Neither configure nor autogen.sh found" >&2
         return 1
-    }
+    fi
     
-    # Configure
     log_tool "$arch" "Configuring ${TOOL_NAME}..."
     
-    # Set up cross-compilation environment
     local host_triplet=""
     case "$arch" in
         x86_64)      host_triplet="x86_64-linux-musl" ;;
@@ -198,8 +170,6 @@ EOF
             ;;
     esac
     
-    # Configure with static linking
-    # Don't mix system headers with musl toolchain
     CFLAGS="$cflags" \
     LDFLAGS="$ldflags" \
     ./configure \
@@ -212,7 +182,6 @@ EOF
         return 1
     }
     
-    # Build
     log_tool "$arch" "Building ${TOOL_NAME}..."
     make -j$(nproc) LDFLAGS="$ldflags" AM_LDFLAGS="-all-static" || {
         log_tool "$arch" "ERROR: Build failed" >&2
@@ -231,7 +200,6 @@ install_tool() {
     
     log_tool "$arch" "Installing ${TOOL_NAME} to ${install_dir}..."
     
-    # Find and install the binary
     local ply_binary=""
     if [ -f "src/ply/ply" ]; then
         ply_binary="src/ply/ply"
@@ -240,7 +208,6 @@ install_tool() {
     elif [ -f "ply" ]; then
         ply_binary="ply"
     else
-        # Search for the binary
         ply_binary=$(find . -name "ply" -type f -executable | grep -v "\.sh$" | head -1)
     fi
     
@@ -255,20 +222,17 @@ install_tool() {
         return 1
     }
     
-    # Verify it's statically linked
     if ! file "${install_dir}/ply" | grep -qE "(statically linked|static-pie linked)"; then
         log_tool "$arch" "ERROR: Binary is not statically linked!" >&2
         ldd "${install_dir}/ply" || true
         return 1
     fi
     
-    # Strip the binary
     log_tool "$arch" "Stripping ${TOOL_NAME} binary..."
     "${STRIP}" "${install_dir}/ply" || {
         log_tool "$arch" "WARNING: Failed to strip binary" >&2
     }
     
-    # Show final size
     local final_size=$(ls -lh "${install_dir}/ply" | awk '{print $5}')
     log_tool "$arch" "Final binary size: $final_size"
     
@@ -280,29 +244,20 @@ main() {
     
     local arch=$1
     
-    # Check if architecture is supported by ply
-    # Based on actual implementation and known working architectures
     case "$arch" in
         x86_64)
-            # x86_64.c - little endian only
             ;;
         aarch64)
-            # aarch64.c - little endian only (aarch64_be not supported per GitHub issue #36)
             ;;
         arm32v5le|arm32v5lehf|arm32v7le|arm32v7lehf|armv6)
-            # arm.c - little endian ARM 32-bit variants
             ;;
         mips32le|mips64le)
-            # mips.c - little endian MIPS variants (safer to assume LE only)
             ;;
         riscv32)
-            # riscv32.c - little endian
             ;;
         riscv64)
-            # riscv64.c - little endian
             ;;
         ppc64le)
-            # powerpc.c - little endian PowerPC 64
             ;;
         *)
             log_tool "$arch" "ERROR: Architecture is not supported by ply" >&2

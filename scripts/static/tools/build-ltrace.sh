@@ -11,8 +11,8 @@ source "$LIB_DIR/dependency_builder.sh"
 TOOL_NAME="ltrace"
 TOOL_VERSION="0.8.1"
 LTRACE_URL="https://gitlab.com/cespedes/ltrace/-/archive/0.8.1/ltrace-0.8.1.tar.gz"
+LTRACE_SHA512="e508bb4640e04f8e22dc15f468ec4e84e94162fb2b6ab9d3d4e3af92970eb6b336b08a9070c1a705ea00365af6f5b077672fbf081bfd13d89be3025fff1662c4"
 
-# Map architecture to ltrace sysdeps directory
 get_ltrace_arch() {
     local arch="$1"
     case "$arch" in
@@ -36,11 +36,9 @@ get_ltrace_arch() {
     esac
 }
 
-# Get host triplet for configure
 get_host_triplet() {
     local toolchain_name="${CC%-gcc}"
     
-    # For musl toolchains, use simplified triplets
     if echo "${CC}" | grep -q "musl"; then
         case "${toolchain_name}" in
             x86_64-*) echo "x86_64-pc-linux-gnu" ;;
@@ -51,7 +49,6 @@ get_host_triplet() {
             mips-*) echo "mips-linux-gnu" ;;
             mipsel-*) echo "mipsel-linux-gnu" ;;
             *) 
-                # Generic fallback: strip musl suffixes
                 local base="${toolchain_name%-linux-musl*}"
                 echo "${base%-musl*}-linux-gnu"
                 ;;
@@ -61,31 +58,26 @@ get_host_triplet() {
     fi
 }
 
-# Main build function
 build_ltrace() {
     local arch="$1"
     
     log_tool "$arch" "Starting ltrace build..."
     
-    # Setup paths
     local arch_build_dir="${BUILD_DIR}/${TOOL_NAME}-${TOOL_VERSION}-${arch}"
     local src_dir="${arch_build_dir}/${TOOL_NAME}-${TOOL_VERSION}"
     local output_file="${OUTPUT_DIR}/${arch}/${TOOL_NAME}"
     
-    # Check if already built (unless SKIP_IF_EXISTS is explicitly set to false)
     if [ "${SKIP_IF_EXISTS:-true}" = "true" ] && [ -f "$output_file" ]; then
         log_tool "$arch" "ltrace already built, skipping..."
         return 0
     fi
     
-    # Download and extract
     mkdir -p "$arch_build_dir"
-    if ! download_and_extract "$LTRACE_URL" "$arch_build_dir" 0; then
+    if ! download_and_extract "$LTRACE_URL" "$arch_build_dir" 0 "$LTRACE_SHA512"; then
         log_tool "$arch" "ERROR: Failed to download ltrace" >&2
         return 1
     fi
     
-    # Check architecture support
     local ltrace_arch=$(get_ltrace_arch "$arch")
     if [ "$ltrace_arch" = "UNSUPPORTED" ] || [ ! -d "$src_dir/sysdeps/linux-gnu/$ltrace_arch" ]; then
         log_tool "$arch" "ERROR: Architecture not supported by ltrace" >&2
@@ -97,7 +89,6 @@ build_ltrace() {
         return 1
     }
     
-    # Apply patches
     local patches_dir="/build/patches/ltrace"
     if [ -d "$patches_dir" ]; then
         for patch_file in "$patches_dir"/*.patch; do
@@ -107,7 +98,6 @@ build_ltrace() {
         done
     fi
     
-    # Generate configure if needed
     if [ ! -f "configure" ]; then
         log_tool "$arch" "Generating configure script..."
         mkdir -p config/m4 2>/dev/null || true
@@ -117,7 +107,6 @@ build_ltrace() {
         }
     fi
     
-    # Build musl dependencies if needed
     if echo "${CC}" | grep -q "musl"; then
         log_tool "$arch" "Building musl dependencies..."
         build_musl_fts_cached "$arch" >/dev/null || return 1
@@ -125,16 +114,13 @@ build_ltrace() {
         build_argp_standalone_cached "$arch" >/dev/null || return 1
     fi
     
-    # Build main dependencies
     local elfutils_dir=$(build_libelf_cached "$arch") || return 1
     local zlib_dir=$(build_zlib_cached "$arch") || return 1
     
-    # Get flags
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")
     local host_triplet=$(get_host_triplet)
     
-    # Configure
     log_tool "$arch" "Configuring ltrace..."
     cd "$src_dir" || {
         log_tool "$arch" "ERROR: Lost source directory before configure" >&2
@@ -152,22 +138,18 @@ build_ltrace() {
         return 1
     }
     
-    # Build (allow linking to fail, we'll do it manually)
     log_tool "$arch" "Building ltrace..."
     CFLAGS="$cflags -I${elfutils_dir}/include" \
     LDFLAGS="$ldflags -L${elfutils_dir}/lib" \
     make -j$(nproc) || true
     
-    # Check if object files exist
     if [ ! -f "main.o" ] || [ ! -f ".libs/libltrace.a" ] || [ ! -f "sysdeps/.libs/libos.a" ]; then
         log_tool "$arch" "ERROR: Compilation failed" >&2
         return 1
     fi
     
-    # Manual static linking
     log_tool "$arch" "Linking ltrace..."
     
-    # Find C++ support libraries for demangling
     local cxx_libs=""
     local toolchain_prefix="${CC%-gcc}"
     if [ -f "/build/toolchains-musl/${toolchain_prefix}-cross/${toolchain_prefix}/lib/libsupc++.a" ]; then
@@ -188,7 +170,6 @@ build_ltrace() {
             exit 1
         }
     
-    # Install
     mkdir -p "${OUTPUT_DIR}/${arch}"
     ${STRIP} ltrace
     cp ltrace "$output_file"
@@ -197,7 +178,6 @@ build_ltrace() {
     return 0
 }
 
-# Entry point
 if [ "$#" -lt 1 ]; then
     echo "Usage: $0 <architecture>"
     exit 1

@@ -8,8 +8,9 @@ source "$LIB_DIR/dependency_builder.sh"
 source "$LIB_DIR/core/compile_flags.sh"
 source "$LIB_DIR/build_helpers.sh"
 
-SOCAT_VERSION="${SOCAT_VERSION:-1.7.4.4}"
+SOCAT_VERSION="${SOCAT_VERSION:-1.8.0.3}"
 SOCAT_URL="http://www.dest-unreach.org/socat/download/socat-${SOCAT_VERSION}.tar.gz"
+SOCAT_SHA512="600a3387e9756e0937d2db49de9066df03d9818e4042da6b72109d1b5688dd72352754773a19bd2558fe93ec6a8a73e80e7cf2602fd915960f66c403fd89beef"
 
 build_socat_ssl() {
     local arch=$1
@@ -42,11 +43,12 @@ build_socat_ssl() {
     readline_dir=$(echo "$readline_dir" | tr -d '\n' | xargs)
     ncurses_dir=$(echo "$ncurses_dir" | tr -d '\n' | xargs)
     
-    download_source "socat" "$SOCAT_VERSION" "$SOCAT_URL" || return 1
+    if ! download_and_extract "$SOCAT_URL" "$build_dir" 0 "$SOCAT_SHA512"; then
+        log_tool_error "socat-ssl" "Failed to download and extract source"
+        return 1
+    fi
     
-    cd "$build_dir"
-    tar xf /build/sources/socat-${SOCAT_VERSION}.tar.gz
-    cd socat-${SOCAT_VERSION}
+    cd "$build_dir/socat-${SOCAT_VERSION}"
     
     cat > config.cache << EOF
 ac_cv_func_setenv=yes

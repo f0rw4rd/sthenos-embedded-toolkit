@@ -1,98 +1,66 @@
 #!/bin/bash
-# Build script for tls-noverify shared library
-# Simplified to reuse central toolchain infrastructure
+set -e
 
-# Build tls-noverify for an architecture
-build_tls_noverify() {
-    local arch="$1"
-    local log_enabled="${2:-true}"
-    local debug="${3:-0}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$(cd "$SCRIPT_DIR/../../lib" 2>/dev/null && pwd)" || LIB_DIR="/build/scripts/lib"
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/core/compile_flags.sh"
+source "$LIB_DIR/logging.sh"
+source "$LIB_DIR/build_helpers.sh"
+source "$LIB_DIR/shared_lib_helpers.sh"
+
+TOOL_NAME="tls-noverify"
+TLS_PRELOADER_URL="https://github.com/f0rw4rd/tls-preloader/archive/refs/heads/main.tar.gz"
+TLS_PRELOADER_SHA512="e3e90942a52011f166bd539faccec405ebb78151f9175f039e5a9176ad1b81401de52f695470715cb0e5063d6c1f10b84d15ba699ac6855954ebb1cb40d78870"
+
+# Main execution when called as script
+main() {
+    local arch="${1:-}"
     
-    # Map architecture name
-    arch=$(map_arch_name "$arch")
-    
-    # Check if this architecture supports the current libc type
-    if [ "$LIBC_TYPE" = "musl" ]; then
-        local musl_name=$(get_musl_toolchain "$arch")
-        if [ -z "$musl_name" ]; then
-            log_debug "Skipping tls-noverify for $arch - no musl toolchain available"
-            return 2  # Special return code for skipped
-        fi
-    else
-        local glibc_name=$(get_glibc_toolchain "$arch")
-        if [ -z "$glibc_name" ]; then
-            log_debug "Skipping tls-noverify for $arch - no glibc toolchain available"
-            return 2  # Special return code for skipped
-        fi
+    if [ -z "$arch" ]; then
+        echo "Usage: $0 <arch>"
+        exit 1
     fi
     
-    # Set output directory using new structure
-    local output_dir="$STATIC_OUTPUT_DIR/$arch/shared/$LIBC_TYPE"
-    local output_file="$output_dir/libtlsnoverify.so"
+    arch=$(map_arch_name "$arch")
+    
+    # Check if toolchain is available
+    if ! check_toolchain_availability "$arch"; then
+        return 2
+    fi
     
     # Check if already built
-    if [ -f "$output_file" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
-        local size=$(ls -lh "$output_file" 2>/dev/null | awk '{print $5}')
-        log "libtlsnoverify.so already built for $arch ($size)"
+    if check_shared_library_exists "$arch" "libtlsnoverify"; then
         return 0
     fi
     
     log "Building tls-noverify for $arch..."
     
-    # Download repository as tarball from master/main branch
-    local src_dir="/tmp/tls-preloader-src-$$"
-    log "Downloading tls-preloader source..."
+    local output_dir="${STATIC_OUTPUT_DIR:-/build/output}/$arch/shared/${LIBC_TYPE:-musl}"
+    local output_file="$output_dir/libtlsnoverify.so"
+    mkdir -p "$output_dir"
     
-    mkdir -p "$src_dir"
-    cd "$src_dir"
-    
-    source "$(dirname "${BASH_SOURCE[0]}")/../../lib/build_helpers.sh"
-    if ! download_source "tls-preloader" "main" "https://github.com/f0rw4rd/tls-preloader/archive/refs/heads/main.tar.gz"; then
-        log_error "Failed to download tls-preloader source"
-        rm -rf "$src_dir"
+    # Setup toolchain
+    if ! setup_shared_toolchain "$arch"; then
         return 1
     fi
     
-    tar xzf "/build/sources/main.tar.gz"
-    cd tls-preloader-main
-    log "Using tls-preloader from main branch"
+    local src_dir="/tmp/tls-preloader-src-$$"
+    log "Downloading and extracting tls-preloader source..."
     
-    # Ensure output directory exists
-    mkdir -p "$output_dir"
+    mkdir -p "$src_dir"
     
-    if [ "$LIBC_TYPE" = "glibc" ]; then
-        # For glibc, add toolchain to PATH
-        local toolchain_name=$(get_glibc_toolchain "$arch")
-        if [ -z "$toolchain_name" ]; then
-            log_error "No glibc toolchain for $arch (this shouldn't happen)"
-            rm -rf "$src_dir"
-            return 1
-        fi
-        
-        local toolchain_dir="$GLIBC_TOOLCHAINS_DIR/$toolchain_name"
-        if [ ! -d "$toolchain_dir" ]; then
-            log_error "Toolchain not found at $toolchain_dir"
-            rm -rf "$src_dir"
-            return 1
-        fi
-        
-        export PATH="$toolchain_dir/bin:$PATH"
-        export CC="${toolchain_name}-gcc"
-        export STRIP="${toolchain_name}-strip"
-    else
-        # For musl, setup standard environment
-        if ! setup_arch "$arch"; then
-            log_error "Failed to setup musl toolchain for $arch"
-            rm -rf "$src_dir"
-            return 1
-        fi
+    if ! download_and_extract "$TLS_PRELOADER_URL" "$src_dir" 1 "$TLS_PRELOADER_SHA512"; then
+        log_error "Failed to download and extract tls-preloader source"
+        cleanup_build_dir "$src_dir"
+        return 1
     fi
     
-    # Save current directory
+    cd "$src_dir"
+    log "Using tls-preloader from main branch"
+    
     local orig_dir="$(pwd)"
     
-    
-    # Clean any previous build artifacts
     make clean >/dev/null 2>&1 || true
     
     log "Building libtlsnoverify.so using Makefile..."
@@ -100,29 +68,31 @@ build_tls_noverify() {
     if ! make; then
         log_error "Make failed"
         make clean >/dev/null 2>&1 || true
-        cd "$orig_dir"
-        rm -rf "$src_dir"
+        cleanup_build_dir "$src_dir"
         return 1
     fi
     
-    # Check if the library was built
     if [ ! -f "libtlsnoverify.so" ]; then
-        log_error "libtlsnoverify.so was not created"
+        log_error "libtlsnoverify.so not found after build"
         make clean >/dev/null 2>&1 || true
-        cd "$orig_dir"
-        rm -rf "$src_dir"
+        cleanup_build_dir "$src_dir"
         return 1
     fi
     
-    # Copy to output directory
+    log "Stripping libtlsnoverify.so..."
+    $STRIP libtlsnoverify.so 2>/dev/null || true
+    
+    log "Copying to output directory..."
     cp libtlsnoverify.so "$output_file"
     
-    local size=$(ls -lh "$output_file" | awk '{print $5}')
-    log "Successfully built libtlsnoverify.so for $arch ($size)"
+    make clean >/dev/null 2>&1 || true
+    cleanup_build_dir "$src_dir"
     
-    # Cleanup
-    cd "$orig_dir"
-    rm -rf "$src_dir"
+    local size=$(ls -lh "$output_file" 2>/dev/null | awk '{print $5}')
+    log "Successfully built: $output_file ($size)"
     
     return 0
 }
+
+# Execute main function with all arguments
+main "$@"

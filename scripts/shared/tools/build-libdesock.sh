@@ -1,10 +1,18 @@
 #!/bin/bash
-# Build script for libdesock shared library
-# Simplified to reuse central toolchain infrastructure
+set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$(cd "$SCRIPT_DIR/../../lib" 2>/dev/null && pwd)" || LIB_DIR="/build/scripts/lib"
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/core/compile_flags.sh"
+source "$LIB_DIR/logging.sh"
+source "$LIB_DIR/build_helpers.sh"
+source "$LIB_DIR/shared_lib_helpers.sh"
+
+TOOL_NAME="libdesock"
 LIBDESOCK_URL="https://github.com/f0rw4rd/libdesock/archive/refs/heads/master.tar.gz"
+LIBDESOCK_SHA512="4668cb5697bad73747cb972f0b3ba8742eb71133c24e1b6022aa35476d057e6010d594ec45ce50d5e0deb2c9c323801ddd2a88e740a7f11951903b89611eb3c9"
 
-# Get architecture name for libdesock
 get_desock_arch() {
     local arch="$1"
     
@@ -24,109 +32,52 @@ get_desock_arch() {
     esac
 }
 
-# Build libdesock for an architecture
-build_libdesock() {
-    local arch="$1"
-    local log_enabled="${2:-true}"
-    local debug="${3:-0}"
+# Main execution when called as script
+main() {
+    local arch="${1:-}"
     
-    # Map architecture name
-    arch=$(map_arch_name "$arch")
-    
-    # Check if this architecture supports the current libc type
-    if [ "$LIBC_TYPE" = "musl" ]; then
-        local musl_name=$(get_musl_toolchain "$arch")
-        if [ -z "$musl_name" ]; then
-            log_debug "Skipping libdesock for $arch - no musl toolchain available"
-            return 2  # Special return code for skipped
-        fi
-    else
-        local glibc_name=$(get_glibc_toolchain "$arch")
-        if [ -z "$glibc_name" ]; then
-            log_debug "Skipping libdesock for $arch - no glibc toolchain available"
-            return 2  # Special return code for skipped
-        fi
+    if [ -z "$arch" ]; then
+        echo "Usage: $0 <arch>"
+        exit 1
     fi
     
-    # Set output directory using new structure
-    local output_dir="$STATIC_OUTPUT_DIR/$arch/shared/$LIBC_TYPE"
-    local output_file="$output_dir/libdesock.so"
+    arch=$(map_arch_name "$arch")
+    
+    # Check if toolchain is available
+    if ! check_toolchain_availability "$arch"; then
+        return 2
+    fi
     
     # Check if already built
-    if [ -f "$output_file" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
-        local size=$(ls -lh "$output_file" 2>/dev/null | awk '{print $5}')
-        log "libdesock.so already built for $arch ($size)"
+    if check_shared_library_exists "$arch" "libdesock"; then
         return 0
     fi
     
     log "Building libdesock for $arch..."
     
-    # Ensure output directory exists
+    local output_dir="${STATIC_OUTPUT_DIR:-/build/output}/$arch/shared/${LIBC_TYPE:-musl}"
+    local output_file="$output_dir/libdesock.so"
     mkdir -p "$output_dir"
     
-    if [ "$LIBC_TYPE" = "glibc" ]; then
-        # For glibc, add toolchain to PATH
-        local toolchain_name=$(get_glibc_toolchain "$arch")
-        if [ -z "$toolchain_name" ]; then
-            log_error "No glibc toolchain for $arch (this shouldn't happen)"
-            return 1
-        fi
-        
-        local toolchain_dir="$GLIBC_TOOLCHAINS_DIR/$toolchain_name"
-        if [ ! -d "$toolchain_dir" ]; then
-            log_error "Toolchain not found at $toolchain_dir"
-            return 1
-        fi
-        
-        export PATH="$toolchain_dir/bin:$PATH"
-        export CC="${toolchain_name}-gcc"
-        export STRIP="${toolchain_name}-strip"
-    else
-        # For musl, setup standard environment
-        if ! setup_arch "$arch"; then
-            log_error "Failed to setup musl toolchain for $arch"
-            return 1
-        fi
+    # Setup toolchain
+    if ! setup_shared_toolchain "$arch"; then
+        return 1
     fi
     
-    # Map architecture name for libdesock
     local desock_arch=$(get_desock_arch "$arch")
     
-    # Create build directory
-    local build_dir="/tmp/build-libdesock-${arch}-${LIBC_TYPE}-$$"
+    local build_dir="/tmp/build-libdesock-${arch}-${LIBC_TYPE:-musl}-$$"
     mkdir -p "$build_dir"
+    
+    log "Downloading and extracting libdesock..."
+    if ! download_and_extract "$LIBDESOCK_URL" "$build_dir" 1 "$LIBDESOCK_SHA512"; then
+        log_error "Failed to download and extract libdesock"
+        cleanup_build_dir "$build_dir"
+        return 1
+    fi
+    
     cd "$build_dir"
     
-    source "$BASE_DIR/scripts/lib/build_helpers.sh"
-    log "Downloading libdesock..."
-    if ! download_source "libdesock" "unknown" "$LIBDESOCK_URL"; then
-        log_error "Failed to download libdesock"
-        cd /
-        rm -rf "$build_dir"
-        return 1
-    fi
-    
-    # Copy from central source location to build directory
-    local filename=$(basename "$LIBDESOCK_URL")
-    cp "/build/sources/$filename" "libdesock.tar.gz"
-    
-    # Extract
-    if ! tar xzf libdesock.tar.gz; then
-        log_error "Failed to extract libdesock"
-        cd /
-        rm -rf "$build_dir"
-        return 1
-    fi
-    
-    # Enter the extracted directory (GitHub uses 'main' branch now, not 'master')
-    if ! cd libdesock-main 2>/dev/null && ! cd libdesock-master 2>/dev/null && ! cd libdesock-*; then
-        log_error "Failed to find extracted libdesock directory"
-        cd /
-        rm -rf "$build_dir"
-        return 1
-    fi
-    
-    # Get the dynamic linker path for the target architecture
     local interpreter=""
     case "$arch" in
         x86_64)     interpreter="/lib64/ld-linux-x86-64.so.2" ;;
@@ -143,14 +94,11 @@ build_libdesock() {
         *)          interpreter="/lib/ld-linux.so.2" ;;
     esac
     
-    # Get compile and link flags
     local cflags=$(get_compile_flags "$arch" "shared" "")
     local ldflags=$(get_link_flags "$arch" "shared")
     
-    # Add libdesock-specific defines
     cflags="$cflags -DFD_TABLE_SIZE=128 -DMAX_CONNS=128 -DSHARED"
     
-    # Setup architecture-specific syscall header
     local arch_dir=""
     case "$arch" in
         x86_64)     arch_dir="x86_64" ;;
@@ -160,74 +108,49 @@ build_libdesock() {
         mips64*)    arch_dir="mips64" ;;
         mipsn32*)   arch_dir="mipsn32" ;;
         mips*)      arch_dir="mips" ;;
-        ppc64*)     arch_dir="powerpc64" ;;
-        ppc32*) arch_dir="powerpc" ;;
+        ppc64*)     arch_dir="ppc64" ;;
+        ppc*)       arch_dir="ppc" ;;
         s390x)      arch_dir="s390x" ;;
         riscv64)    arch_dir="riscv64" ;;
-        microblaze*) arch_dir="microblaze" ;;
-        or1k)       arch_dir="or1k" ;;
-        m68k)       arch_dir="m68k" ;;
-        sh*)        arch_dir="sh" ;;
-        *)          
-            log_error "Unsupported architecture for libdesock: $arch"
-            cd /
-            rm -rf "$build_dir"
-            return 1
-            ;;
+        riscv32)    arch_dir="riscv32" ;;
+        *)          arch_dir="generic" ;;
     esac
     
-    # Copy the architecture-specific syscall header
-    if [ -f "src/include/arch/$arch_dir/syscall_arch.h" ]; then
-        cp "src/include/arch/$arch_dir/syscall_arch.h" "src/include/"
-    else
-        log_error "Architecture header not found: src/include/arch/$arch_dir/syscall_arch.h"
-        cd /
-        rm -rf "$build_dir"
+    # Check if there's an architecture-specific source file
+    local source_file="src/libdesock.c"
+    if [ -f "arch/$arch_dir/libdesock.c" ]; then
+        source_file="arch/$arch_dir/libdesock.c"
+        log "Using architecture-specific source for $arch_dir"
+    fi
+    
+    log "Compiling libdesock..."
+    
+    if ! $CC $cflags -DINTERP_PATH=\"$interpreter\" -c "$source_file" -o libdesock.o 2>&1; then
+        log_error "Compilation failed"
+        cleanup_build_dir "$build_dir"
         return 1
     fi
     
-    # Compile all source files
-    log "Compiling libdesock source files..."
-    local obj_files=""
-    for src_file in src/*.c; do
-        # Skip test_helper.c as it's for tests only
-        if [[ "$src_file" == *"test_helper.c" ]]; then
-            continue
-        fi
-        
-        local obj_file="${src_file%.c}.o"
-        obj_file=$(basename "$obj_file")
-        
-        if ! $CC $cflags -Isrc/include -c "$src_file" -o "$obj_file"; then
-            log_error "Failed to compile $src_file"
-            cd /
-            rm -rf "$build_dir"
-            return 1
-        fi
-        obj_files="$obj_files $obj_file"
-    done
-    
-    # Link all object files
     log "Linking libdesock.so..."
-    if ! $CC $ldflags -o libdesock.so $obj_files -ldl -lpthread; then
+    if ! $CC $ldflags -o libdesock.so libdesock.o -ldl 2>&1; then
         log_error "Linking failed"
-        cd /
-        rm -rf "$build_dir"
+        cleanup_build_dir "$build_dir"
         return 1
     fi
     
-    # Strip
+    log "Stripping libdesock.so..."
     $STRIP libdesock.so 2>/dev/null || true
     
-    # Copy to output directory
+    log "Copying to output directory..."
     cp libdesock.so "$output_file"
     
-    local size=$(ls -lh "$output_file" | awk '{print $5}')
-    log "Successfully built libdesock.so for $arch ($size)"
+    cleanup_build_dir "$build_dir"
     
-    # Cleanup
-    cd /
-    rm -rf "$build_dir"
+    local size=$(ls -lh "$output_file" 2>/dev/null | awk '{print $5}')
+    log "Successfully built: $output_file ($size)"
     
     return 0
 }
+
+# Execute main function with all arguments
+main "$@"

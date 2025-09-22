@@ -1,21 +1,17 @@
 #!/bin/bash
-# On-demand toolchain management for Sthenos Embedded Toolkit
-# Downloads toolchains only when needed and caches them in Docker volumes
 
-# Source required libraries
 source /build/scripts/lib/config.sh
 source /build/scripts/lib/logging.sh
 source /build/scripts/lib/core/architectures.sh
 source /build/scripts/lib/core/arch_helper.sh
+source /build/scripts/lib/build_helpers.sh
 
 MUSL_TOOLCHAIN_DIR="$MUSL_TOOLCHAINS_DIR"
 GLIBC_TOOLCHAIN_DIR="$GLIBC_TOOLCHAINS_DIR"
 BASE_URL_BOOTLIN="$BOOTLIN_BASE_URL"
 
-# Ensure toolchain directories exist
 ensure_build_dirs
 
-# Check if musl toolchain exists and is valid
 musl_toolchain_exists() {
     local arch="$1"
     local musl_name=$(get_musl_toolchain "$arch" 2>/dev/null)
@@ -26,7 +22,6 @@ musl_toolchain_exists() {
     
     local toolchain_dir="$MUSL_TOOLCHAIN_DIR/${musl_name}-cross"
     
-    # Check if directory exists and has a working compiler
     if [ -d "$toolchain_dir/bin" ] && [ -n "$(ls "$toolchain_dir/bin/"*-gcc 2>/dev/null)" ]; then
         return 0
     fi
@@ -34,7 +29,6 @@ musl_toolchain_exists() {
     return 1
 }
 
-# Check if glibc toolchain exists and is valid
 glibc_toolchain_exists() {
     local arch="$1"
     local glibc_name=$(get_glibc_toolchain "$arch" 2>/dev/null)
@@ -45,7 +39,6 @@ glibc_toolchain_exists() {
     
     local toolchain_dir="$GLIBC_TOOLCHAIN_DIR/$glibc_name"
     
-    # Check if directory exists and has a working compiler
     if [ -d "$toolchain_dir/bin" ] && [ -n "$(ls "$toolchain_dir/bin/"*-gcc 2>/dev/null)" ]; then
         return 0
     fi
@@ -53,7 +46,6 @@ glibc_toolchain_exists() {
     return 1
 }
 
-# Download single musl toolchain
 download_musl_toolchain_single() {
     local arch="$1"
     local musl_name=$(get_musl_toolchain "$arch" 2>/dev/null)
@@ -63,7 +55,6 @@ download_musl_toolchain_single() {
         return 1
     fi
     
-    # Check for custom URL (e.g., LoongArch)
     local custom_url=$(get_custom_musl_url "$arch" 2>/dev/null)
     local url
     local filename
@@ -71,9 +62,11 @@ download_musl_toolchain_single() {
     if [ -n "$custom_url" ]; then
         url="$custom_url"
         filename=$(basename "$custom_url")
+        expected_sha512=$(get_custom_musl_sha512 "$arch")
     else
         url="https://musl.cc/${musl_name}-cross.tgz"
         filename="${musl_name}-cross.tgz"
+        expected_sha512=$(get_musl_sha512 "$arch")
     fi
     
     local target_dir="$MUSL_TOOLCHAIN_DIR/${musl_name}-cross"
@@ -82,56 +75,24 @@ download_musl_toolchain_single() {
     log "  URL: $url"
     log "  Target: $target_dir"
     
-    # Create temp directory for download
     local temp_dir="/tmp/musl-download-${arch}-$$"
     mkdir -p "$temp_dir"
     cd "$temp_dir"
     
-    # Cleanup function
-    cleanup_musl() {
-        cd /
-        rm -rf "$temp_dir"
-    }
-    trap cleanup_musl EXIT
+    trap "cleanup_build_dir '$temp_dir'" EXIT
     
-    source "$(dirname "${BASH_SOURCE[0]}")/build_helpers.sh"
-    if ! download_source "musl-toolchain" "$arch" "$url"; then
-        cleanup_musl
+    if ! download_and_extract "$url" "$temp_dir" 0 "$expected_sha512"; then
+        log_error "Failed to download and extract musl toolchain for $arch"
+        cleanup_build_dir "$temp_dir"
         return 1
     fi
     
-    log "  Extracting $filename..."
-    local source_file="/build/sources/$filename"
-    
-    case "$filename" in
-        *.tar.xz)
-            if ! tar xf "$source_file" -C .; then
-                log_error "Failed to extract musl toolchain for $arch"
-                return 1
-            fi
-            ;;
-        *.tgz|*.tar.gz)
-            if ! tar xzf "$source_file" -C .; then
-                log_error "Failed to extract musl toolchain for $arch"
-                return 1
-            fi
-            ;;
-        *)
-            log_error "Unknown archive format for $filename"
-            return 1
-            ;;
-    esac
-    
-    # Move to final location
     mkdir -p "$(dirname "$target_dir")"
     
-    # Handle different directory structures
     if [ -n "$custom_url" ]; then
-        # For custom toolchains, find the extracted directory
         local extracted_dir=$(find . -maxdepth 1 -type d -name "*" | grep -v "^\.$" | head -1)
         
         if [ -n "$extracted_dir" ] && [ -d "$extracted_dir" ]; then
-            # Check if this directory has a bin/ subdirectory with gcc
             if [ -d "$extracted_dir/bin" ] && [ -n "$(ls "$extracted_dir/bin/"*gcc 2>/dev/null)" ]; then
                 mv "$extracted_dir" "$target_dir"
             else
@@ -143,11 +104,9 @@ download_musl_toolchain_single() {
             return 1
         fi
     else
-        # Standard musl.cc toolchains
         mv "${musl_name}-cross" "$target_dir"
     fi
     
-    # Verify
     if [ ! -d "$target_dir/bin" ] || [ -z "$(ls "$target_dir/bin/"*-gcc 2>/dev/null)" ]; then
         log_error "Invalid musl toolchain structure for $arch"
         rm -rf "$target_dir"
@@ -156,7 +115,6 @@ download_musl_toolchain_single() {
     
     log "✓ Successfully downloaded musl toolchain for $arch"
     
-    # Special case: if we just downloaded arm32v7le, also copy to arm32v7lehf
     if [ "$musl_name" = "armv7l-linux-musleabihf" ] && [ "$arch" = "arm32v7le" ]; then
         local arm32v7lehf_dir="$MUSL_TOOLCHAIN_DIR/armv7l-linux-musleabihf-cross-hf"
         if [ ! -d "$arm32v7lehf_dir" ]; then
@@ -168,11 +126,9 @@ download_musl_toolchain_single() {
     return 0
 }
 
-# Download single glibc toolchain
 download_glibc_toolchain_single() {
     local arch="$1"
     
-    # Check for custom URL first (e.g., LoongArch)
     local custom_url=$(get_custom_glibc_url "$arch" 2>/dev/null)
     local url
     local filename
@@ -180,19 +136,19 @@ download_glibc_toolchain_single() {
     if [ -n "$custom_url" ]; then
         url="$custom_url"
         filename=$(basename "$custom_url")
-        log "Using custom glibc URL for $arch"
+        expected_sha512=$(get_custom_glibc_sha512 "$arch")
+        log "Using custom glibc URL for $arch"        
     else
-        # Get bootlin URL directly from architecture config
         local bootlin_url=$(get_bootlin_url "$arch" 2>/dev/null)
         if [ -z "$bootlin_url" ]; then
             log_error "No bootlin URL defined for architecture: $arch"
             return 1
         fi
+        expected_sha512=$(get_bootlin_sha512 "$arch")
         url="$BASE_URL_BOOTLIN/$bootlin_url"
         filename=$(basename "$bootlin_url")
     fi
     
-    # Get glibc name for target directory
     local glibc_name=$(get_glibc_toolchain "$arch" 2>/dev/null)
     if [ -z "$glibc_name" ]; then
         log_error "No glibc toolchain name for $arch"
@@ -205,41 +161,27 @@ download_glibc_toolchain_single() {
     log "  URL: $url"
     log "  Target: $target_dir"
     
-    # Create temp directory
     local temp_dir="/tmp/glibc-download-${arch}-$$"
     mkdir -p "$temp_dir"
     cd "$temp_dir"
     
-    # Cleanup function
-    cleanup_glibc() {
-        cd /
-        rm -rf "$temp_dir"
-    }
-    trap cleanup_glibc EXIT
-    if ! download_source "glibc-toolchain" "$arch" "$url"; then
-        cleanup_glibc
+    trap "cleanup_build_dir '$temp_dir'" EXIT
+    
+    if ! download_and_extract "$url" "$temp_dir" 0 "$expected_sha512"; then
+        log_error "Failed to download and extract glibc toolchain for $arch"
+        cleanup_build_dir "$temp_dir"
         return 1
     fi
     
-    log "  Extracting $filename..."
-    local source_file="/build/sources/$filename"
-    if ! tar xf "$source_file" -C .; then
-        log_error "Failed to extract glibc toolchain for $arch"
-        return 1
-    fi
-    
-    # Find extracted directory
     local extracted_dir=$(find . -maxdepth 1 -type d -name "*" | grep -v "^\.$" | head -1)
     if [ -z "$extracted_dir" ]; then
         log_error "No directory found after extraction for $arch"
         return 1
     fi
     
-    # Move to final location
     mkdir -p "$(dirname "$target_dir")"
     mv "$extracted_dir" "$target_dir"
     
-    # Verify
     if [ ! -d "$target_dir/bin" ] || [ -z "$(ls "$target_dir/bin/"*-gcc 2>/dev/null)" ]; then
         log_error "Invalid glibc toolchain structure for $arch"
         rm -rf "$target_dir"
@@ -255,7 +197,6 @@ ensure_toolchain() {
     
     log "Checking toolchain availability for architecture: $arch"
     
-    # Check if architecture supports musl
     if arch_supports_musl "$arch"; then
         if ! musl_toolchain_exists "$arch"; then
             log "Musl toolchain not found for $arch, downloading..."
@@ -268,7 +209,6 @@ ensure_toolchain() {
         fi
     fi
     
-    # Check if architecture supports glibc
     if arch_supports_glibc "$arch"; then
         if ! glibc_toolchain_exists "$arch"; then
             log "Glibc toolchain not found for $arch, downloading..."
@@ -281,7 +221,6 @@ ensure_toolchain() {
         fi
     fi
     
-    # Verify at least one toolchain is available
     if ! arch_supports_musl "$arch" && ! arch_supports_glibc "$arch"; then
         log_error "Architecture $arch is not supported (no musl or glibc toolchain available)"
         return 1
@@ -290,7 +229,6 @@ ensure_toolchain() {
     return 0
 }
 
-# Batch ensure toolchains for multiple architectures
 ensure_toolchains() {
     local architectures=("$@")
     local failed_count=0

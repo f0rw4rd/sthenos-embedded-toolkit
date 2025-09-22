@@ -2,6 +2,91 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/logging.sh"
 
+validate_sha512() {
+    local description="$1"
+    local expected_sha512="$2"
+    local url="${3:-}"    
+    
+    if [ -z "$expected_sha512" ]; then        
+        log_error "SHA512 checksum is required but missing for $description"
+        [ -n "$url" ] && log_error "URL: $url"        
+        return 1        
+    fi
+    
+    if [ ${#expected_sha512} -ne 128 ]; then
+        log_error "Invalid SHA512 length for $description"
+        log_error "Expected 128 characters, got ${#expected_sha512}"
+        log_error "SHA512: $expected_sha512"
+        return 1
+    fi
+    
+    if ! echo "$expected_sha512" | grep -qE '^[a-fA-F0-9]{128}$'; then
+        log_error "Invalid SHA512 format for $description"
+        log_error "SHA512 must contain only hexadecimal characters (0-9, a-f, A-F)"
+        log_error "SHA512: $expected_sha512"
+        return 1
+    fi
+    
+    return 0
+}
+
+verify_sha512() {
+    local file_path="$1"
+    local expected_sha512="$2"
+    local description="$3"
+    
+    if [ -z "$expected_sha512" ]; then
+        log "Skipping SHA512 verification for $description (no checksum provided)"
+        return 0
+    fi
+    
+    expected_sha512=$(echo "$expected_sha512" | tr '[:upper:]' '[:lower:]')
+    
+    log "Verifying SHA512 checksum for $description..."
+    local actual_sha512=$(sha512sum "$file_path" | cut -d' ' -f1)
+    
+    if [ "$actual_sha512" != "$expected_sha512" ]; then
+        log_error "SHA512 checksum verification failed for $description"
+        log_error "Expected: $expected_sha512"
+        log_error "Actual:   $actual_sha512"
+        log_error "File may be corrupted or tampered with!"
+        return 1
+    else
+        log "SHA512 checksum verified successfully for $description"
+        return 0
+    fi
+}
+
+check_cached_file() {
+    local file_path="$1"
+    local expected_sha512="$2"
+    local description="$3"
+    
+    if [ ! -f "$file_path" ]; then
+        return 1  # File doesn't exist
+    fi
+    
+    if [ -z "$expected_sha512" ]; then
+        log "SHA512 was not set! for $filepath"
+        return 1
+    fi    
+    
+    expected_sha512=$(echo "$expected_sha512" | tr '[:upper:]' '[:lower:]')
+    
+    local actual_sha512=$(sha512sum "$file_path" | cut -d' ' -f1)
+    if [ "$actual_sha512" = "$expected_sha512" ]; then
+        log "Using cached $description (checksum verified)"
+        return 0
+    else
+        log_error "SECURITY WARNING: Checksum mismatch for cached $description"
+        log_error "Expected: $expected_sha512"
+        log_error "Actual:   $actual_sha512"
+        log_error "File may be corrupted or tampered with. Deleting and re-downloading..."
+        rm -f "$file_path"
+        return 1
+    fi
+}
+
 debug_compiler_info() {
     if [ "${DEBUG:-0}" = "1" ] || [ "${DEBUG:-0}" = "true" ]; then
         log "[DEBUG] Build Configuration:"
@@ -36,13 +121,23 @@ download_source() {
     local tool_name=$1
     local version=$2
     local url=$3
-    local extract_name=${4:-"${tool_name}-${version}"}
+    local expected_sha512=$4
+    local extract_name=${5:-"${tool_name}-${version}"}
     
     local source_dir="/build/sources"
     mkdir -p "$source_dir"
     
     local filename=$(basename "$url")
     local source_file="$source_dir/$filename"
+    local description="$tool_name-$version"
+    
+    if ! validate_sha512 "$description" "$expected_sha512" "$url"; then
+        return 1
+    fi
+    
+    if check_cached_file "$source_file" "$expected_sha512" "$tool_name source"; then
+        return 0
+    fi
     
     if [ ! -f "$source_file" ]; then
         log "Downloading $tool_name source..."
@@ -52,7 +147,7 @@ download_source() {
         local download_success=false
         
         while [ $retry_count -lt $max_retries ]; do
-            if wget -q --tries=2 --timeout=60 "$url" -O "$source_file"; then
+            if wget -q --tries=2 "$url" -O "$source_file"; then
                 download_success=true
                 break
             else
@@ -68,6 +163,11 @@ download_source() {
             rm -f "$source_file"
             return 1
         fi
+        
+        if ! verify_sha512 "$source_file" "$expected_sha512" "$description"; then
+            rm -f "$source_file"
+            return 1
+        fi
     fi
     
     return 0
@@ -77,14 +177,22 @@ download_with_progress() {
     local description=$1
     local url=$2
     local output_file=$3
-    local max_retries=${4:-3}
-    local timeout=${5:-60}
+    local expected_sha512=$4
+    local max_retries=${5:-3}    
+    
+    if ! validate_sha512 "$description" "$expected_sha512" "$url"; then
+        return 1
+    fi
+    
+    if check_cached_file "$output_file" "$expected_sha512" "$description"; then
+        return 0
+    fi
     
     local retry_count=0
     local download_success=false
     
     while [ $retry_count -lt $max_retries ]; do
-        if wget --progress=bar:force:noscroll --tries=2 --timeout="$timeout" "$url" -O "$output_file"; then
+        if wget --progress=bar:force:noscroll --tries=2 "$url" -O "$output_file"; then
             download_success=true
             break
         else
@@ -99,6 +207,11 @@ download_with_progress() {
     
     if [ "$download_success" = false ]; then
         log_error "Failed to download $description after $max_retries attempts"
+        rm -f "$output_file"
+        return 1
+    fi
+    
+    if ! verify_sha512 "$output_file" "$expected_sha512" "$description"; then
         rm -f "$output_file"
         return 1
     fi
@@ -256,4 +369,21 @@ export_cross_compiler() {
     export NM="${cross_prefix}nm"
     export LD="${cross_prefix}ld"
 }
+
+export -f validate_sha512
+export -f verify_sha512
+export -f check_cached_file
+export -f debug_compiler_info
+export -f check_binary_exists
+export -f download_source
+export -f download_with_progress
+export -f standard_configure
+export -f create_build_dir
+export -f cleanup_build_dir
+export -f install_binary
+export -f verify_static_binary
+export -f create_cross_cache
+export -f get_binary_size
+export -f validate_args
+export -f export_cross_compiler
 

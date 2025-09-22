@@ -1,44 +1,54 @@
 #!/bin/bash
 
-#  architecture mapping
-# Maps various architecture names to canonical musl names
+
+ARCH_MAP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$ARCH_MAP_DIR/core/architectures.sh"
+
+is_canonical_arch() {
+    local arch="$1"
+    for canonical in "${ALL_ARCHITECTURES[@]}"; do
+        if [ "$arch" = "$canonical" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
 
 map_arch_name() {
     local input_arch=$1
     
+    if is_canonical_arch "$input_arch"; then
+        echo "$input_arch"
+        return 0
+    fi
+    
     case "$input_arch" in
-        # Direct mappings (already canonical)
-        arm32v5le|arm32v5lehf|arm32v7le|arm32v7lehf|armeb|armv6|armv7m|armv7r|\
-        mips32le|mips32lesf|mips32be|mips32besf|mipsn32|mipsn32el|mips64|mips64le|mips64n32|mips64n32el|\
-        ppc32be|ppc32besf|ppc32le|ppc32lesf|ppc64be|ppc64le|\
-        i486|ix86le|x86_64|aarch64|aarch64_be|\
-        sh2|sh2eb|sh4|sh4eb|\
-        microblaze|microblazeel|or1k|m68k|s390x|\
-        riscv32|riscv64)
-            echo "$input_arch"
-            ;;
             
-        # Glibc/Bootlin names to musl names
         mips32)      echo "mips32be" ;;
         mips32el)    echo "mips32le" ;;
         armv5)       echo "arm32v5le" ;;
+        armv6)       echo "armv6" ;;
         ppc32)       echo "ppc32be" ;;
-        powerpc)     echo "ppc32be" ;;     # Another alias for ppc32
+        powerpc)     echo "ppc32be" ;;
+        powerpc32)   echo "ppc32be" ;;
+        powerpc64)   echo "ppc64be" ;;
+        powerpcle)   echo "ppc32le" ;;
+        powerpclesf) echo "ppc32lesf" ;;
         openrisc)    echo "or1k" ;;
         aarch64be)   echo "aarch64_be" ;;
         
-        # Glibc-only architectures (not available in musl)
-        sparc64|nios2|arcle|xtensa)
-            echo "[glibc-only] $input_arch not available in musl"
-            return 1
-            ;;
+        mips32-sf)   echo "mips32besf" ;;
+        mips32el-sf) echo "mips32lesf" ;;
+        powerpc-sf)  echo "ppc32besf" ;;
+        powerpcle-sf) echo "ppc32lesf" ;;
+        ppc32-sf)    echo "ppc32besf" ;;
+        ppc32le-sf)  echo "ppc32lesf" ;;
+        
         microblazebe) echo "microblaze" ;; # musl only has big-endian microblaze
         
-        # Common aliases
         arm)         echo "arm32v7le" ;;  # Default ARM
         mips)        echo "mips32be" ;; # Default MIPS
         ppc)         echo "ppc32be" ;;    # Default PowerPC
-        powerpc32)   echo "ppc32be" ;;    # Yet another PowerPC alias
         
         *)
             echo "$input_arch"  # Return as-is if unknown

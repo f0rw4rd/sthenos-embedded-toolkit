@@ -10,6 +10,7 @@ source "$LIB_DIR/tools.sh"
 TOOL_NAME="strace"
 STRACE_VERSION="${STRACE_VERSION:-6.6}"
 STRACE_URL="https://github.com/strace/strace/releases/download/v${STRACE_VERSION}/strace-${STRACE_VERSION}.tar.xz"
+STRACE_SHA512="77ea45c72e513f6c07026cd9b2cc1a84696a5a35cdd3b06dd4a360fb9f9196958e3f6133b4a9c91e091c24066ba29e0330b6459d18a9c390caae2dba97ab399b"
 
 configure_strace() {
     local arch=$1
@@ -37,7 +38,6 @@ build_strace() {
         return 0
     fi
     
-    
     setup_toolchain_for_arch "$arch" || {
         log_tool_error "$TOOL_NAME" "Unknown architecture: $arch"
         return 1
@@ -50,14 +50,12 @@ build_strace() {
     
     trap "cleanup_build_dir '$build_dir'" EXIT
     
-    download_source "$TOOL_NAME" "$STRACE_VERSION" "$STRACE_URL" || {
-        log_tool_error "$TOOL_NAME" "Failed to download source"
+    if ! download_and_extract "$STRACE_URL" "$build_dir" 0 "$STRACE_SHA512"; then
+        log_tool_error "$TOOL_NAME" "Failed to download and extract source"
         return 1
-    }
+    fi
     
-    cd "$build_dir"
-    tar xf "/build/sources/${TOOL_NAME}-${STRACE_VERSION}.tar.xz"
-    cd "${TOOL_NAME}-${STRACE_VERSION}"
+    cd "$build_dir/${TOOL_NAME}-${STRACE_VERSION}"
     
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")

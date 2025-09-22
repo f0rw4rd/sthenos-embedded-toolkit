@@ -9,6 +9,7 @@ source "$LIB_DIR/build_helpers.sh"
 
 BASH_VER="${BASH_VER:-5.2.15}"
 BASH_URL="https://ftp.gnu.org/gnu/bash/bash-5.2.15.tar.gz"
+BASH_SHA512="08a67f6da4af7a75ff2b2d5a9eb8fc46d8c6e9ae80ccaf73b51736d6609916861b1f3fced938ce3ea16d014edb324e1a3d8e03f4917f68dc56ffb665316f26c7"
 
 build_bash() {
     local arch=$1
@@ -21,9 +22,11 @@ build_bash() {
     
     setup_toolchain_for_arch "$arch" || return 1
     
-    download_source "bash" "$BASH_VER" "$BASH_URL" || return 1
+    if ! download_and_extract "$BASH_URL" "$build_dir" 0 "$BASH_SHA512"; then
+        log_tool_error "bash" "Failed to download and extract source"
+        return 1
+    fi
     
-    cp -a /build/sources/bash-${BASH_VER} "$build_dir/"
     cd "$build_dir/bash-${BASH_VER}"
     
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")

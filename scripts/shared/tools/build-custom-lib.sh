@@ -1,67 +1,101 @@
 #!/bin/bash
-set -uo pipefail
+set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../../lib/common.sh"
+LIB_DIR="$(cd "$SCRIPT_DIR/../../lib" 2>/dev/null && pwd)" || LIB_DIR="/build/scripts/lib"
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/core/compile_flags.sh"
+source "$LIB_DIR/logging.sh"
+source "$LIB_DIR/build_helpers.sh"
+source "$LIB_DIR/shared_lib_helpers.sh"
 
-build_custom_lib() {
-    local arch="$1"
-    local libc_type="${2:-glibc}"
-    local build_dir="/build/tmp/custom-lib-${arch}-${libc_type}"
-    local output_dir="/build/output/${arch}/shared/${libc_type}"
-    local output_file="${output_dir}/custom-lib.so"
-    
-    log_info "Building custom-lib for ${arch} with ${libc_type}"
-    
-    if [ -f "$output_file" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
-        log_success "custom-lib already built for ${arch} (${libc_type})"
-        return 0
-    fi
-    
-    setup_arch "$arch" || return 2
-    setup_toolchain "$arch" "$libc_type" || return 2
-    
-    rm -rf "$build_dir"
-    mkdir -p "$build_dir" "$output_dir"
-    
-    cp -r /build/example-custom-lib/* "$build_dir/"
-    cd "$build_dir"
-    
-    local cflags="${CFLAGS} ${SHARED_CFLAGS}"
-    local ldflags="${LDFLAGS} ${SHARED_LDFLAGS}"
-    
-    log_info "Compiling custom-lib.c"
-    ${CC} ${cflags} -c custom-lib.c -o custom-lib.o || {
-        log_error "Failed to compile custom-lib.c"
-        return 1
-    }
-    
-    log_info "Linking custom-lib.so"
-    ${CC} ${cflags} ${ldflags} -o custom-lib.so custom-lib.o || {
-        log_error "Failed to link custom-lib.so"
-        return 1
-    }
-    
-    cp custom-lib.so "$output_file"
-    
-    if [ -f "$output_file" ]; then
-        log_success "Successfully built custom-lib for ${arch} (${libc_type})"
-        log_info "Output: $output_file"
-        return 0
-    else
-        log_error "Build completed but output file not found"
-        return 1
-    fi
-}
+TOOL_NAME="custom-lib"
+SOURCE_DIR="${BUILD_DIR:-/build}/example-custom-lib"
 
+# Main execution when called as script
 main() {
     local arch="${1:-}"
-    local libc_type="${2:-glibc}"
     
     if [ -z "$arch" ]; then
-        log_error "Architecture not specified"
+        echo "Usage: $0 <arch>"
+        exit 1
+    fi
+    
+    arch=$(map_arch_name "$arch")
+    
+    # Check if toolchain is available
+    if ! check_toolchain_availability "$arch"; then
+        return 2
+    fi
+    
+    # Check if already built
+    if check_shared_library_exists "$arch" "$TOOL_NAME"; then
+        return 0
+    fi
+    
+    if [ ! -d "$SOURCE_DIR" ]; then
+        log_error "Source directory not found: $SOURCE_DIR"
         return 1
     fi
     
-    build_custom_lib "$arch" "$libc_type"
+    log "Building custom-lib for $arch..."
+    
+    local output_dir="${STATIC_OUTPUT_DIR:-/build/output}/$arch/shared/${LIBC_TYPE:-musl}"
+    local output_file="$output_dir/${TOOL_NAME}.so"
+    mkdir -p "$output_dir"
+    
+    # Setup toolchain
+    if ! setup_shared_toolchain "$arch"; then
+        return 1
+    fi
+    
+    local cflags=$(get_compile_flags "$arch" "shared" "")
+    cflags="$cflags -D_GNU_SOURCE"
+    
+    local ldflags=$(get_link_flags "$arch" "shared")
+    ldflags="$ldflags -ldl"
+    
+    local build_dir="/tmp/build-${TOOL_NAME}-${arch}-${LIBC_TYPE:-musl}-$$"
+    mkdir -p "$build_dir"
+    cd "$build_dir"
+    
+    cp -r "$SOURCE_DIR"/* "$build_dir/"
+    
+    log_debug "CC=$CC"
+    log_debug "CFLAGS=$cflags"
+    log_debug "LDFLAGS=$ldflags"
+    
+    # Use the Makefile to build
+    export CFLAGS="$cflags"
+    export LDFLAGS="$ldflags"
+    
+    if ! make clean 2>&1; then
+        log_debug "Clean failed (may be expected on first run)"
+    fi
+    
+    if ! make all 2>&1; then
+        log_error "Make failed for $TOOL_NAME/$arch"
+        cleanup_build_dir "$build_dir"
+        return 1
+    fi
+    
+    if [ ! -f "${TOOL_NAME}.so" ]; then
+        log_error "${TOOL_NAME}.so not found after build"
+        cleanup_build_dir "$build_dir"
+        return 1
+    fi
+    
+    $STRIP "${TOOL_NAME}.so" 2>/dev/null || true
+    
+    cp "${TOOL_NAME}.so" "$output_file"
+    
+    cleanup_build_dir "$build_dir"
+    
+    local size=$(ls -lh "$output_file" 2>/dev/null | awk '{print $5}')
+    log "Successfully built: $output_file ($size)"
+    
+    return 0
 }
+
+# Execute main function with all arguments
+main "$@"

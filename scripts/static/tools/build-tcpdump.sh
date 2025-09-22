@@ -12,6 +12,7 @@ LIBPCAP_VERSION="${LIBPCAP_VERSION:-1.10.4}"
 LIBPCAP_URL="https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz"
 TCPDUMP_VERSION="${TCPDUMP_VERSION:-4.99.4}"
 TCPDUMP_URL="https://www.tcpdump.org/release/tcpdump-${TCPDUMP_VERSION}.tar.gz"
+TCPDUMP_SHA512="cb51e19574707d07c0de90dd4c301955897f2c9f2a69beb7162c08f59189f55625346d1602c8d66ab2b4c626ea4b0df1f08ed8734d2d7f536d0a7840c2d6d8df"
 
 build_tcpdump() {
     local arch=$1
@@ -21,7 +22,6 @@ build_tcpdump() {
     if check_binary_exists "$arch" "tcpdump"; then
         return 0
     fi
-    
     
     setup_toolchain_for_arch "$arch" || return 1
     
@@ -35,9 +35,12 @@ build_tcpdump() {
     
     log_tool "tcpdump" "Building tcpdump for $arch..."
     cd "$build_dir"
-    download_source "tcpdump" "$TCPDUMP_VERSION" "$TCPDUMP_URL" || return 1
-    tar xf /build/sources/tcpdump-${TCPDUMP_VERSION}.tar.gz
-    cd tcpdump-${TCPDUMP_VERSION}
+    if ! download_and_extract "$TCPDUMP_URL" "$build_dir" 0 "$TCPDUMP_SHA512"; then
+        log_tool_error "tcpdump" "Failed to download and extract source"
+        return 1
+    fi
+    
+    cd "$build_dir/tcpdump-${TCPDUMP_VERSION}"
     
     sed -i '1i#include <fcntl.h>' tcpdump.c
     

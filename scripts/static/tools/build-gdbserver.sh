@@ -7,8 +7,9 @@ source "$LIB_DIR/common.sh"
 source "$LIB_DIR/core/compile_flags.sh"
 source "$LIB_DIR/build_helpers.sh"
 
-GDB_VERSION="${GDB_VERSION:-11.2}"
+GDB_VERSION="${GDB_VERSION:-16.1}"
 GDB_URL="https://ftp.gnu.org/gnu/gdb/gdb-${GDB_VERSION}.tar.xz"
+GDB_SHA512="cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
 
 build_gdbserver() {
     local arch=$1
@@ -17,17 +18,16 @@ build_gdbserver() {
     
     if check_binary_exists "$arch" "gdbserver"; then
         return 0
-    fi
-    
+    fi    
     
     setup_toolchain_for_arch "$arch" || return 1
     
-    download_source "gdb" "$GDB_VERSION" "$GDB_URL" || return 1
+    if ! download_and_extract "$GDB_URL" "$build_dir" 0 "$GDB_SHA512"; then
+        log_tool_error "gdbserver" "Failed to download and extract source"
+        return 1
+    fi
     
-    cd "$build_dir"
-    
-    tar xf /build/sources/gdb-${GDB_VERSION}.tar.xz
-    cd gdb-${GDB_VERSION}
+    cd "$build_dir/gdb-${GDB_VERSION}"
     
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")

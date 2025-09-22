@@ -2,12 +2,12 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Source common.sh which loads all required libraries
 LIB_DIR="$(cd "$SCRIPT_DIR/../../lib" 2>/dev/null && pwd)" || LIB_DIR="/build/scripts/lib"
 source "$LIB_DIR/common.sh"
 
-SOCAT_VERSION="${SOCAT_VERSION:-1.7.4.4}"
+SOCAT_VERSION="${SOCAT_VERSION:-1.8.0.3}"
 SOCAT_URL="http://www.dest-unreach.org/socat/download/socat-${SOCAT_VERSION}.tar.gz"
+SOCAT_SHA512="600a3387e9756e0937d2db49de9066df03d9818e4042da6b72109d1b5688dd72352754773a19bd2558fe93ec6a8a73e80e7cf2602fd915960f66c403fd89beef"
 
 build_socat() {
     local arch=$1
@@ -18,14 +18,14 @@ build_socat() {
         return 0
     fi
     
-    
     setup_toolchain_for_arch "$arch" || return 1
     
-    download_source "socat" "$SOCAT_VERSION" "$SOCAT_URL" || return 1
+    if ! download_and_extract "$SOCAT_URL" "$build_dir" 0 "$SOCAT_SHA512"; then
+        log_tool_error "socat" "Failed to download and extract source"
+        return 1
+    fi
     
-    cd "$build_dir"
-    tar xf /build/sources/socat-${SOCAT_VERSION}.tar.gz
-    cd socat-${SOCAT_VERSION}
+    cd "$build_dir/socat-${SOCAT_VERSION}"
     
     cat > config.cache << EOF
 ac_cv_func_setenv=yes
