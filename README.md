@@ -19,24 +19,34 @@
 
 Fast, reliable pipeline for building static debugging and analysis tools for embedded systems across 50+ architectures. Supports both musl and glibc toolchains, with LD_PRELOAD shared libraries for runtime manipulation.
 
-## Quick Start
+## Download Pre-built Binaries
+
+**Download binaries directly from GitHub:**
+👉 **[output folder](https://github.com/f0rw4rd/sthenos-embedded-toolkit/tree/main/output)**
+
+Select your architecture → Download the tools you need.
+
+## Building from Source
+
+**Important:** If you have cloned this repository with Git LFS enabled, you need to clear the LFS placeholder files before building:
 
 ```bash
-# Build all tools for all architectures
+# Clear LFS files from output directory
+rm -rf output/*
+
+# Then build all tools for all architectures
 ./build
 
-# Build specific tool
-./build strace
-
-# Build for specific architecture  
-./build --arch arm32v5le
-
-# Build specific tool for specific architecture
+# Or build specific tool for specific architecture
 ./build strace --arch arm32v5le
+
+# Build all tools for specific architecture  
+./build --arch arm32v5le
 
 # See all available options
 ./build --help
 ```
+
 
 ### Common Options
 
@@ -73,28 +83,6 @@ Fast, reliable pipeline for building static debugging and analysis tools for emb
 - Docker
 - 20GB+ free disk space
 - Internet connection
-
-## Download Pre-built Binaries
-
-**Download binaries directly from GitHub:**
-👉 **[output folder](https://github.com/f0rw4rd/sthenos-embedded-toolkit/tree/main/output)**
-
-Select your architecture → Download the tools you need.
-
-```bash
-# Test if binaries work on your target
-./custom  # Should display banner if correct
-```
-
-## Building from Source
-
-```bash
-# Build all tools for all architectures
-./build
-
-# Build specific tool for specific architecture
-./build strace --arch arm32v5le
-```
 
 Built binaries are placed in `output/<architecture>/<tool>` - all statically linked.
 
