@@ -62,7 +62,7 @@ rm -rf output/*
 
 **Analysis & Debugging**: strace, ltrace, ply, gdbserver, tcpdump, nmap
 
-**Network Tools**: socat, ncat, dropbear (SSH), can-utils
+**Network Tools**: socat, ncat, dropbear (SSH), can-utils, curl, microsocks
 
 **System Tools**: bash, busybox, shell utilities
 
@@ -83,6 +83,40 @@ rm -rf output/*
 - Docker
 - 20GB+ free disk space
 - Internet connection
+
+## Download Pre-built Binaries
+
+**Download binaries directly from GitHub:**
+👉 **[output folder](https://github.com/f0rw4rd/sthenos-embedded-toolkit/tree/main/output)**
+
+### Find Your Architecture
+
+Run this command on your target system to detect architecture:
+```bash
+echo "$(uname -m)-$(uname -m | grep -q '64' && echo 64 || echo 32)-$(echo -n I | hexdump -c 2>/dev/null | grep -q I && echo le || echo be)-$(grep -qE 'FPU.*yes|vfp|neon' /proc/cpuinfo 2>/dev/null && echo hf || echo sf)-$(ldd --version 2>&1 | grep -q musl && echo musl || echo glibc)"
+```
+
+Example outputs:
+- `mips-32-be-sf-musl` → Use `output/mips32v2besf/`
+- `arm-32-le-hf-glibc` → Use `output/arm32v7lehf/`
+- `x86_-64-le-hf-glibc` → Use `output/x86_64/`
+
+Then download the tools from the matching directory.
+
+```bash
+# Test if binaries work on your target
+./custom  # Should display banner if correct
+```
+
+## Building from Source
+
+```bash
+# Build all tools for all architectures
+./build
+
+# Build specific tool for specific architecture
+./build strace --arch arm32v5le
+```
 
 Built binaries are placed in `output/<architecture>/<tool>` - all statically linked.
 

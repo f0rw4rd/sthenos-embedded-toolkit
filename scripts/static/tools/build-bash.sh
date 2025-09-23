@@ -16,7 +16,10 @@ build_bash() {
     local build_dir=$(create_build_dir "bash" "$arch")
     local TOOL_NAME="bash"
     
-    if check_binary_exists "$arch" "bash"; then
+    local output_path=$(get_output_path "$arch" "bash")
+    if [ -f "$output_path" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
+        local size=$(get_binary_size "$output_path")
+        log "[$arch] Already built: $output_path ($size)"
         return 0
     fi
     
@@ -55,9 +58,11 @@ build_bash() {
     }
     
     $STRIP bash
-    cp bash "/build/output/$arch/bash"
+    local output_path=$(get_output_path "$arch" "bash")
+    mkdir -p "$(dirname "$output_path")"
+    cp bash "$output_path"
     
-    local size=$(get_binary_size "/build/output/$arch/bash")
+    local size=$(get_binary_size "$output_path")
     log_tool "bash" "Built successfully for $arch ($size)"
     
     cleanup_build_dir "$build_dir"

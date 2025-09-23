@@ -65,7 +65,7 @@ build_ltrace() {
     
     local arch_build_dir="${BUILD_DIR}/${TOOL_NAME}-${TOOL_VERSION}-${arch}"
     local src_dir="${arch_build_dir}/${TOOL_NAME}-${TOOL_VERSION}"
-    local output_file="${OUTPUT_DIR}/${arch}/${TOOL_NAME}"
+    local output_file=$(get_output_path "$arch" "$TOOL_NAME")
     
     if [ "${SKIP_IF_EXISTS:-true}" = "true" ] && [ -f "$output_file" ]; then
         log_tool "$arch" "ltrace already built, skipping..."
@@ -170,7 +170,7 @@ build_ltrace() {
             exit 1
         }
     
-    mkdir -p "${OUTPUT_DIR}/${arch}"
+    mkdir -p "$(dirname "$output_file")"
     ${STRIP} ltrace
     cp ltrace "$output_file"
     

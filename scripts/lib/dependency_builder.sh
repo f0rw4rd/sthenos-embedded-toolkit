@@ -131,24 +131,29 @@ configure_openssl() {
         openssl_target="linux64-s390x"
     fi
     
+    # Build zlib first if enabling zlib support
+    local zlib_dir=$(build_zlib_cached "$arch") || {
+        log_error "Failed to build zlib for OpenSSL"
+        return 1
+    }
+    
     ./Configure \
         --prefix="$cache_dir" \
         --openssldir="$cache_dir/ssl" \
         "$openssl_target" \
         no-shared \
         no-dso \
-        no-zlib \
+        --with-zlib-include="$zlib_dir/include" \
+        --with-zlib-lib="$zlib_dir/lib" \
+        zlib \
         no-async \
         no-comp \
-        no-idea \
-        no-mdc2 \
-        no-rc5 \
         no-ec2m \
         no-sm2 \
         no-sm4 \
-        no-ssl3 \
-        no-seed \
-        no-weak-ssl-ciphers \
+        enable-ssl3 \
+        enable-ssl3-method \
+        enable-weak-ssl-ciphers \
         -static \
         -ffunction-sections -fdata-sections \
         $openssl_cflags
@@ -702,5 +707,84 @@ build_libelf_cached() {
         configure_libelf \
         build_libelf \
         install_libelf \
+        "$sha512"
+}
+
+configure_libssh2() {
+    local arch=$1
+    local build_dir=$2
+    local cache_dir=$3
+    
+    # Build OpenSSL first as dependency
+    local openssl_dir=$(build_openssl_cached "$arch") || {
+        log_error "Failed to build OpenSSL for libssh2"
+        return 1
+    }
+    
+    # Build zlib as optional dependency for compression
+    local zlib_dir=$(build_zlib_cached "$arch") || {
+        log_error "Failed to build zlib for libssh2"
+        return 1
+    }
+    
+    local cflags=$(get_compile_flags "$arch" "static" "libssh2")
+    local ldflags=$(get_link_flags "$arch" "static")
+    
+    # Add OpenSSL and zlib paths
+    cflags="$cflags -I$openssl_dir/include -I$zlib_dir/include"
+    ldflags="$ldflags -L$openssl_dir/lib -L$zlib_dir/lib"
+    
+    export CFLAGS="$cflags -ffunction-sections -fdata-sections"
+    export LDFLAGS="$ldflags"
+    export LIBS="-lssl -lcrypto -lz"
+    
+    ./configure \
+        --host=$HOST \
+        --prefix="$cache_dir" \
+        --with-openssl \
+        --with-libssl-prefix="$openssl_dir" \
+        --with-libz \
+        --with-libz-prefix="$zlib_dir" \
+        --disable-shared \
+        --enable-static \
+        --disable-examples-build \
+        --disable-debug \
+        --disable-dependency-tracking
+}
+
+build_libssh2() {
+    local arch=$1
+    local build_dir=$2
+    
+    parallel_make
+}
+
+install_libssh2() {
+    local action=$1
+    local cache_dir=$2
+    local build_dir=$3
+    
+    if [ "$action" = "check" ]; then
+        [ -f "$cache_dir/lib/libssh2.a" ]
+        return $?
+    fi
+    
+    make install
+}
+
+build_libssh2_cached() {
+    local arch=$1
+    local version="1.11.1"
+    local sha512="8703636fc28f0b12c8171712f3d605e0466a5bb9ba06e136c3203548fc3408ab07defd71dc801d7009a337e1e02fd60e8933a2a526d5ef0ce53153058d201233"
+    
+    build_dependency_generic \
+        "libssh2" \
+        "$version" \
+        "https://libssh2.org/download/libssh2-$version.tar.gz" \
+        "libssh2-$version" \
+        "$arch" \
+        configure_libssh2 \
+        build_libssh2 \
+        install_libssh2 \
         "$sha512"
 }

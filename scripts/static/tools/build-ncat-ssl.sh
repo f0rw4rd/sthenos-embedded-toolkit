@@ -17,7 +17,10 @@ build_ncat_ssl() {
     local build_dir=$(create_build_dir "ncat-ssl" "$arch")
     local TOOL_NAME="ncat-ssl"
     
-    if check_binary_exists "$arch" "ncat-ssl"; then
+    local output_path=$(get_output_path "$arch" "ncat-ssl")
+    if [ -f "$output_path" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
+        local size=$(get_binary_size "$output_path")
+        log "[$arch] Already built: $output_path ($size)"
         return 0
     fi    
     
@@ -28,23 +31,24 @@ build_ncat_ssl() {
         return 1
     }
     
-    download_source "nmap" "$NMAP_VERSION" "$NMAP_URL" "$NMAP_SHA512" || return 1
+    local pcap_dir=$(build_libpcap_cached "$arch") || {
+        log_tool_error "ncat-ssl" "Failed to build/get libpcap for $arch"
+        cleanup_build_dir "$build_dir"
+        return 1
+    }
     
-    cd "$build_dir"
+    if ! download_and_extract "$NMAP_URL" "$build_dir" 0 "$NMAP_SHA512"; then
+        log_tool_error "ncat-ssl" "Failed to download and extract source"
+        return 1
+    fi
     
-    tar xf /build/sources/nmap-${NMAP_VERSION}.tar.bz2
-    cd nmap-${NMAP_VERSION}
-    
-    cd libpcap
-    ./configure --host=$HOST --disable-shared --enable-static --without-libnl
-    make -j$(nproc)
-    cd ..
+    cd "$build_dir/nmap-${NMAP_VERSION}"
     
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")
     
-    cflags="$cflags -I$ssl_dir/include"
-    ldflags="$ldflags -L$ssl_dir/lib"
+    cflags="$cflags -I$ssl_dir/include -I$pcap_dir/include"
+    ldflags="$ldflags -L$ssl_dir/lib -L$pcap_dir/lib"
     
     export CFLAGS="$cflags"
     export LDFLAGS="$ldflags"
@@ -57,7 +61,7 @@ build_ncat_ssl() {
         --without-nmap-update \
         --without-libssh2 \
         --without-libz \
-        --with-libpcap=included \
+        --with-libpcap="$pcap_dir" \
         --enable-static || {
         log_tool_error "ncat-ssl" "Configure failed for $arch"
         cleanup_build_dir "$build_dir"
@@ -72,15 +76,17 @@ build_ncat_ssl() {
     }
     
     $STRIP ncat
-    cp ncat "/build/output/$arch/ncat-ssl"
+    local output_path=$(get_output_path "$arch" "ncat-ssl")
+    mkdir -p "$(dirname "$output_path")"
+    cp ncat "$output_path"
     
-    if ! strings "/build/output/$arch/ncat-ssl" | grep -q "OpenSSL"; then
+    if ! strings "$output_path" | grep -q "OpenSSL"; then
         log_tool_warn "ncat-ssl" "Warning: Binary may not have SSL support"
     fi
     
     cleanup_build_dir "$build_dir"
     
-    local size=$(ls -lh "/build/output/$arch/ncat-ssl" | awk '{print $5}')
+    local size=$(get_binary_size "$output_path")
     log_tool "ncat-ssl" "Built successfully for $arch ($size)"
     
     return 0

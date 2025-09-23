@@ -11,12 +11,12 @@ static inline void print_ascii_art(const char *title, const char *subtitle) {
     printf("          /|\\          ) \\___/ (         /|\\\n");
     printf("        /  |  \\       ( /\\   /\\ )      /  |  \\\n");
     printf("      /    |    \\      \\ x | O /     /    |    \\\n");
-    printf("+----/-----|-----O------\\  |  /----O------|------\\--------+\n");
-    printf("|                 '^`      V     '^`                      |\n");
-    printf("|            STHENOS EMBEDDED TOOLKIT                     |\n");
-    printf("|             %-44s |\n", title);
-    printf("|          %-47s |\n", subtitle);
-    printf("+---------------------------------------------------------+\n");
+    printf("+----/-----|-----O------\\  |  /----O------|------\\---+\n");
+    printf("|                 '^`      V     '^`                 |\n");
+    printf("|                STHENOS EMBEDDED TOOLKIT            |\n");
+    printf("|                  %-33s |\n", title);
+    printf("|          %-41s |\n", subtitle);
+    printf("+----------------------------------------------------+\n");
     printf("  l     /\\     /         \\\\             \\     /\\     l\n");
     printf("  l  /     \\ /            ))              \\ /     \\  l\n");
     printf("   I/       V            //                V       \\I\n");
@@ -178,7 +178,7 @@ static inline void print_build_info_common(const char *info_title, const char *b
     char buffer[64];
     
     printf("┌─────────────────────────────────────────────┐\n");
-    printf("│         %-36s │\n", info_title);
+    printf("│         %-35s │\n", info_title);
     printf("├─────────────────────────────────────────────┤\n");
     
     if (gethostname(hostname, sizeof(hostname)) == 0) {

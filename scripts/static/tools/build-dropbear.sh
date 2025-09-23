@@ -16,7 +16,10 @@ build_dropbear() {
     local build_dir=$(create_build_dir "dropbear" "$arch")
     local TOOL_NAME="dropbear"
     
-    if check_binary_exists "$arch" "dropbear"; then
+    local output_path=$(get_output_path "$arch" "dropbear")
+    if [ -f "$output_path" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
+        local size=$(get_binary_size "$output_path")
+        log "[$arch] Already built: $output_path ($size)"
         return 0
     fi
     
@@ -83,18 +86,25 @@ EOF
     $STRIP dropbearkey
     $STRIP scp
     
-    cp dropbear "/build/output/$arch/dropbear"
+    local output_path=$(get_output_path "$arch" "dropbear")
+    mkdir -p "$(dirname "$output_path")"
+    cp dropbear "$output_path"
     
-    cp dbclient "/build/output/$arch/dbclient"
-    cp dropbearkey "/build/output/$arch/dropbearkey"
-    cp scp "/build/output/$arch/scp"
+    local output_path_dbclient=$(get_output_path "$arch" "dbclient")
+    cp dbclient "$output_path_dbclient"
     
-    local size=$(get_binary_size dropbear)
+    local output_path_dropbearkey=$(get_output_path "$arch" "dropbearkey")
+    cp dropbearkey "$output_path_dropbearkey"
+    
+    local output_path_scp=$(get_output_path "$arch" "scp")
+    cp scp "$output_path_scp"
+    
+    local size=$(get_binary_size "$output_path")
     log_tool "dropbear" "Built successfully for $arch"
     log_tool "dropbear" "  - dropbear (SSH server): $size"
-    log_tool "dropbear" "  - dbclient (SSH client): $(get_binary_size dbclient)"
-    log_tool "dropbear" "  - dropbearkey (key gen): $(get_binary_size dropbearkey)"
-    log_tool "dropbear" "  - scp (secure copy): $(get_binary_size scp)"
+    log_tool "dropbear" "  - dbclient (SSH client): $(get_binary_size "$output_path_dbclient")"
+    log_tool "dropbear" "  - dropbearkey (key gen): $(get_binary_size "$output_path_dropbearkey")"
+    log_tool "dropbear" "  - scp (secure copy): $(get_binary_size "$output_path_scp")"
     
     cleanup_build_dir "$build_dir"
     return 0

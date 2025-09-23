@@ -2,6 +2,19 @@
 
 Sthenos supports 50+ architectures for cross-compilation of static debugging tools.
 
+## Detecting Your Architecture
+
+To detect your system's architecture, bitness, float type, and libc, run:
+
+```bash
+echo "$(uname -m | cut -c1-4)-$(uname -m | grep -q '64' && echo 64 || echo 32)-$(echo -n I | hexdump -c 2>/dev/null | grep -q I && echo le || echo be)-$(grep -qE 'FPU.*yes|vfp|neon' /proc/cpuinfo 2>/dev/null && echo hf || echo sf)-$(ldd --version 2>&1 | grep -q musl && echo musl || echo glibc)"
+```
+
+This will output something like:
+- `mips-32-be-sf-musl` → Use binaries from `output/mips32v2besf/`
+- `arm-32-le-hf-glibc` → Use binaries from `output/arm32v7lehf/`
+- `x86_-64-le-hf-glibc` → Use binaries from `output/x86_64/`
+
 ## Supported Architectures
 
 ### ARM Architectures

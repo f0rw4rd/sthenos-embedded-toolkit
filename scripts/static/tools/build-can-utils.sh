@@ -15,10 +15,11 @@ build_can_utils() {
     local arch=$1
     local build_dir=$(create_build_dir "can-utils" "$arch")
     local TOOL_NAME="can-utils"
+    local can_dir=$(get_output_dir "$arch" "can-utils")
     
-    if [ -d "/build/output/$arch/can-utils" ] && [ "$(ls -A /build/output/$arch/can-utils 2>/dev/null)" ]; then
-        local tool_count=$(ls -1 /build/output/$arch/can-utils | wc -l)
-        log_tool "can-utils" "Already built for $arch ($tool_count tools in can-utils/)"
+    if [ -d "$can_dir" ] && [ "$(ls -A "$can_dir" 2>/dev/null)" ]; then
+        local tool_count=$(ls -1 "$can_dir" | wc -l)
+        log_tool "can-utils" "Already built for $arch ($tool_count tools in ${can_dir##*/})"
         return 0
     fi
     
@@ -52,7 +53,7 @@ build_can_utils() {
         log_tool "can-utils" "Some optional components failed, but core utilities built successfully"
     }
     
-    local can_dir="/build/output/$arch/can-utils"
+    # can_dir already defined at the top of the function
     mkdir -p "$can_dir"
     
     local tools="candump cansend canplayer cangen canbusload canfdtest isotpdump isotprecv isotpsend"

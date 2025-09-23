@@ -77,6 +77,36 @@ All tools are statically linked with musl libc and have zero runtime dependencie
 ./output/aarch64/nmap -sS target_network/24
 ```
 
+#### curl / curl-full
+**HTTP/HTTPS client** - Command-line tool for transferring data with URLs.
+
+```bash
+./build curl --arch x86_64        # Basic curl with HTTP/HTTPS
+./build curl-full --arch x86_64   # Full features including protocols like FTP, LDAP, etc.
+
+# Basic usage
+./output/x86_64/curl https://example.com
+./output/x86_64/curl -X POST -d "data" https://api.example.com
+```
+
+**curl** - Minimal build with HTTP/HTTPS support
+**curl-full** - Full-featured build with additional protocols
+
+#### microsocks
+**Lightweight SOCKS5 proxy** - Minimal SOCKS5 proxy server implementation.
+
+```bash
+./build microsocks --arch arm32v7le
+
+# Run SOCKS5 proxy on port 1080
+./output/arm32v7le/microsocks -p 1080
+
+# With authentication
+./output/arm32v7le/microsocks -u username -P password -p 1080
+```
+
+**Use cases**: Tunneling, network pivoting, bypassing network restrictions
+
 ### System Tools
 
 #### busybox / busybox_nodrop

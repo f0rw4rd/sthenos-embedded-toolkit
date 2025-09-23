@@ -293,20 +293,7 @@ run_static_builds() {
     
     for tool in "${TOOLS_TO_BUILD[@]}"; do
         for arch in "${ARCHS_TO_BUILD[@]}"; do
-            do_static_build "$tool" "$arch" "$libc" "$mode" "$log_enabled" "$debug" || true
-            
-            local canonical_arch=$(map_arch_name "$arch")
-            
-            if [[ "$canonical_arch" == *"[glibc-only]"* ]]; then
-                canonical_arch=$(echo "$canonical_arch" | sed 's/.*\[glibc-only\] \([^ ]*\) .*/\1/')
-            fi
-            if [ "$tool" = "shell" ]; then
-                if [ -d "${OUTPUT_DIR}/${canonical_arch}/shell" ] && [ -n "$(ls -A ${OUTPUT_DIR}/${canonical_arch}/shell 2>/dev/null)" ]; then
-                    COMPLETED=$((COMPLETED + 1))
-                else
-                    FAILED=$((FAILED + 1))
-                fi
-            elif [ -f "${OUTPUT_DIR}/${canonical_arch}/${tool}" ]; then
+            if do_static_build "$tool" "$arch" "$libc" "$mode" "$log_enabled" "$debug"; then
                 COMPLETED=$((COMPLETED + 1))
             else
                 FAILED=$((FAILED + 1))
@@ -321,44 +308,17 @@ run_static_builds() {
     local BUILD_SECS=$((BUILD_TIME % 60))
     
     echo "Total builds: $TOTAL_BUILDS"
-    echo "Completed: $COMPLETED"
-    if [ $FAILED -gt 0 ]; then
-        log_error "Failed: $FAILED"
-    else
-        echo "Failed: $FAILED"
-    fi
+    echo "Successful: $COMPLETED"
+    echo "Failed: $FAILED"
     echo "Build time: ${BUILD_MINS}m ${BUILD_SECS}s"
-    echo ""
-    
-    if [ $FAILED -gt 0 ]; then
-        echo ""
-        echo "Failed builds:"
-        for tool in "${TOOLS_TO_BUILD[@]}"; do
-            for arch in "${ARCHS_TO_BUILD[@]}"; do
-                local canonical_arch=$(map_arch_name "$arch")
-                
-                if [[ "$canonical_arch" == *"[glibc-only]"* ]]; then
-                    canonical_arch=$(echo "$canonical_arch" | sed 's/.*\[glibc-only\] \([^ ]*\) .*/\1/')
-                fi
-                if [ ! -f "${OUTPUT_DIR}/${canonical_arch}/${tool}" ]; then
-                    echo "  - $tool for ${canonical_arch}"
-                    if [ "$log_enabled" = "true" ]; then
-                        local log_file=$(ls -t ${LOGS_DIR}/build-${tool}-${canonical_arch}-*.log 2>/dev/null | head -1)
-                        [ -n "$log_file" ] && echo "    Log: ${log_file#/build/}"
-                    fi
-                fi
-            done
-        done
-    fi
     
     log_info "Cleaning up empty directories..."
     find ${OUTPUT_DIR} -type d -empty -delete 2>/dev/null || true
     
-    if [ $FAILED -eq 0 ]; then
-        echo "SUCCESS: All builds completed successfully"
+    # Return success if at least one build succeeded
+    if [ $COMPLETED -gt 0 ]; then
         return 0
     else
-        log_error "Some builds failed. Check logs for details."
         return 1
     fi
 }

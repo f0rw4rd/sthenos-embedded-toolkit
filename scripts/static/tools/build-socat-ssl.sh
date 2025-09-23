@@ -17,7 +17,10 @@ build_socat_ssl() {
     local build_dir=$(create_build_dir "socat-ssl" "$arch")
     local TOOL_NAME="socat-ssl"
     
-    if check_binary_exists "$arch" "socat-ssl"; then
+    local output_path=$(get_output_path "$arch" "socat-ssl")
+    if [ -f "$output_path" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
+        local size=$(get_binary_size "$output_path")
+        log "[$arch] Already built: $output_path ($size)"
         return 0
     fi
     
@@ -119,7 +122,9 @@ EOF
     }
     
     $STRIP socat
-    cp socat "/build/output/$arch/socat-ssl"
+    local output_path=$(get_output_path "$arch" "socat-ssl")
+    mkdir -p "$(dirname "$output_path")"
+    cp socat "$output_path"
     
     local size=$(ls -lh "/build/output/$arch/socat-ssl" | awk '{print $5}')
     log_tool "socat-ssl" "Built successfully for $arch ($size)"

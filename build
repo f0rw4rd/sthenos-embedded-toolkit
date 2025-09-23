@@ -385,9 +385,11 @@ for i in $(seq 1 $#); do
             echo "  ltrace      Library call tracer (glibc-based)"
             echo "  ply         Dynamic tracer using BPF (limited arch support, LE only)"
             echo "  can-utils   CAN bus utilities (candump, cansend, etc.)"
+            echo "  curl        HTTP/HTTPS client (minimal build)"
+            echo "  curl-full   HTTP/HTTPS client with all protocols (FTP, LDAP, etc.)"
+            echo "  microsocks  Lightweight SOCKS5 proxy server"
             echo "  shell       Shell utilities as static executables (output/<arch>/shell/)"
-            echo "  custom      Custom tool template (musl, modify scripts/tools/build-custom.sh)"
-            echo "  custom-glibc Custom tool template built with glibc"
+            echo "  custom      Custom tool template (musl, modify scripts/tools/build-custom.sh)"            
             echo ""
             echo "SHARED LIBRARIES (LD_PRELOAD):"
             echo "  libshells   All shell libraries (bind, reverse, env, fifo, helper)"
@@ -583,8 +585,8 @@ else
     DEBUG_CMD=""
 fi
 
-LIBC_TYPE="musl"  # Default to musl
-
+# LIBC_TYPE is left unset unless explicitly specified via --libc flag
+# or when building custom-glibc tool
 if [ "$TOOLS" = "custom-glibc" ]; then
     LIBC_TYPE="glibc"
 fi
@@ -624,7 +626,14 @@ if [ "$SHAREDLIB_MODE" != true ]; then
         source /build/scripts/lib/toolchain_manager.sh
         source /build/scripts/static/build-static.sh
 
-        run_static_builds '$TOOLS' '$ARCHITECTURES' '$LIBC_TYPE' '$MODE' '$LOG_ENABLED' '$DEBUG'
+        # If LIBC_TYPE is set, use it directly
+        # Otherwise default to musl (the original behavior)
+        if [ -n '$LIBC_TYPE' ]; then
+            run_static_builds '$TOOLS' '$ARCHITECTURES' '$LIBC_TYPE' '$MODE' '$LOG_ENABLED' '$DEBUG'
+        else
+            # Default to musl when no --libc specified
+            run_static_builds '$TOOLS' '$ARCHITECTURES' 'musl' '$MODE' '$LOG_ENABLED' '$DEBUG'
+        fi
         
         if [ '$BUILD_SHARED' = 'true' ]; then
             echo ''

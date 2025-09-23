@@ -17,11 +17,20 @@ build_ncat() {
     local build_dir=$(create_build_dir "ncat" "$arch")
     local TOOL_NAME="ncat"
     
-    if check_binary_exists "$arch" "ncat"; then
+    local output_path=$(get_output_path "$arch" "ncat")
+    if [ -f "$output_path" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
+        local size=$(get_binary_size "$output_path")
+        log "[$arch] Already built: $output_path ($size)"
         return 0
     fi
     
     setup_toolchain_for_arch "$arch" || return 1
+    
+    local pcap_dir=$(build_libpcap_cached "$arch") || {
+        log_tool_error "ncat" "Failed to build/get libpcap for $arch"
+        cleanup_build_dir "$build_dir"
+        return 1
+    }
     
     if ! download_and_extract "$NMAP_URL" "$build_dir" 0 "$NMAP_SHA512"; then
         log_tool_error "ncat" "Failed to download and extract source"
@@ -30,13 +39,11 @@ build_ncat() {
     
     cd "$build_dir/nmap-${NMAP_VERSION}"
     
-    cd libpcap
-    ./configure --host=$HOST --disable-shared
-    make -j$(nproc)
-    cd ..
-    
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")
+    
+    cflags="$cflags -I$pcap_dir/include"
+    ldflags="$ldflags -L$pcap_dir/lib"
     
     export CFLAGS="$cflags"
     export LDFLAGS="$ldflags"
@@ -49,7 +56,7 @@ build_ncat() {
         --without-nmap-update \
         --without-libssh2 \
         --without-libz \
-        --with-libpcap=included \
+        --with-libpcap="$pcap_dir" \
         --enable-static || {
         log_tool_error "ncat" "Configure failed for $arch"
         cleanup_build_dir "$build_dir"
@@ -64,9 +71,11 @@ build_ncat() {
     }
     
     $STRIP ncat
-    cp ncat "/build/output/$arch/ncat"
+    local output_path=$(get_output_path "$arch" "ncat")
+    mkdir -p "$(dirname "$output_path")"
+    cp ncat "$output_path"
     
-    local size=$(ls -lh "/build/output/$arch/ncat" | awk '{print $5}')
+    local size=$(get_binary_size "$output_path")
     log_tool "ncat" "Built successfully for $arch ($size)"
     
     cleanup_build_dir "$build_dir"

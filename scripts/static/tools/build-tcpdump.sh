@@ -19,7 +19,10 @@ build_tcpdump() {
     local build_dir=$(create_build_dir "tcpdump" "$arch")
     local TOOL_NAME="tcpdump"
     
-    if check_binary_exists "$arch" "tcpdump"; then
+    local output_path=$(get_output_path "$arch" "tcpdump")
+    if [ -f "$output_path" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
+        local size=$(get_binary_size "$output_path")
+        log "[$arch] Already built: $output_path ($size)"
         return 0
     fi
     
@@ -68,9 +71,11 @@ build_tcpdump() {
     }
     
     $STRIP tcpdump
-    cp tcpdump "/build/output/$arch/tcpdump"
+    local output_path=$(get_output_path "$arch" "tcpdump")
+    mkdir -p "$(dirname "$output_path")"
+    cp tcpdump "$output_path"
     
-    local size=$(ls -lh "/build/output/$arch/tcpdump" | awk '{print $5}')
+    local size=$(get_binary_size "$output_path")
     log_tool "tcpdump" "Built successfully for $arch ($size)"
     
     cleanup_build_dir "$build_dir"

@@ -24,7 +24,7 @@ build_shell_static() {
     
     local tools="shell-bind shell-env shell-helper shell-reverse shell-fifo shell-loader"
     
-    local output_dir="/build/output/$arch/shell"
+    local output_dir=$(get_output_dir "$arch" "shell")
     mkdir -p "$output_dir"
     
     local build_dir="/tmp/build-shell-$arch-$$"

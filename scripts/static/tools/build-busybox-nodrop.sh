@@ -17,7 +17,10 @@ build_busybox_nodrop() {
     local TOOL_NAME="busybox_nodrop"
     local output_name="busybox_nodrop"
     
-    if check_binary_exists "$arch" "$output_name"; then
+    local output_path=$(get_output_path "$arch" "$output_name")
+    if [ -f "$output_path" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
+        local size=$(get_binary_size "$output_path")
+        log "[$arch] Already built: $output_path ($size)"
         return 0
     fi
     
@@ -68,9 +71,11 @@ build_busybox_nodrop() {
     }
     
     $STRIP busybox
-    cp busybox "/build/output/$arch/$output_name"
+    local output_path=$(get_output_path "$arch" "$output_name")
+    mkdir -p "$(dirname "$output_path")"
+    cp busybox "$output_path"
     
-    local size=$(get_binary_size "/build/output/$arch/$output_name")
+    local size=$(get_binary_size "$output_path")
     log_tool "busybox_nodrop" "Built successfully for $arch ($size)"
     
     cleanup_build_dir "$build_dir"

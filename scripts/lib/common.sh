@@ -41,7 +41,9 @@ declare -A TOOL_SCRIPTS=(
     ["can-utils"]="$SCRIPT_DIR/../static/tools/build-can-utils.sh"
     ["shell"]="$SCRIPT_DIR/../static/tools/build-shell-static.sh"
     ["custom"]="$SCRIPT_DIR/../static/tools/build-custom.sh"
-    ["custom-glibc"]="$SCRIPT_DIR/../static/tools/build-custom-glibc.sh"
+    ["curl"]="$SCRIPT_DIR/../static/tools/build-curl.sh"
+    ["curl-full"]="$SCRIPT_DIR/../static/tools/build-curl-full.sh"
+    ["microsocks"]="$SCRIPT_DIR/../static/tools/build-microsocks.sh"
 )
 
 declare -A SHARED_LIB_SCRIPTS=(

@@ -107,7 +107,7 @@ debug_compiler_info() {
 check_binary_exists() {
     local arch=$1
     local tool_name=$2
-    local binary_path="/build/output/$arch/$tool_name"
+    local binary_path=$(get_output_path "$arch" "$tool_name")
     
     if [ -f "$binary_path" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
         local size=$(ls -lh "$binary_path" | awk '{print $5}')
@@ -281,14 +281,15 @@ install_binary() {
         return 1
     }
     
-    mkdir -p "/build/output/$arch"
+    local output_path=$(get_output_path "$arch" "$dest_name")
+    mkdir -p "$(dirname "$output_path")"
     
-    cp "$source_file" "/build/output/$arch/$dest_name" || {
+    cp "$source_file" "$output_path" || {
         log_tool_error "$tool_name" "Failed to copy binary for $arch"
         return 1
     }
     
-    local size=$(get_binary_size "/build/output/$arch/$dest_name")
+    local size=$(get_binary_size "$output_path")
     log_tool "$tool_name" "Built successfully for $arch ($size)"
     
     return 0
@@ -348,6 +349,43 @@ get_binary_size() {
     ls -lh "$file_path" 2>/dev/null | awk '{print $5}'
 }
 
+get_output_path() {
+    local arch=$1
+    local tool_name=$2
+    local libc_type="${LIBC_TYPE:-}"
+    
+    if [ -z "$libc_type" ]; then
+        if [ -n "${toolchain_type:-}" ]; then
+            libc_type="$toolchain_type"
+        elif echo "${CROSS_COMPILE:-}" | grep -q musl; then
+            libc_type="musl"
+        else
+            libc_type="glibc"
+        fi
+    fi
+    
+    echo "/build/output/$arch/${tool_name}.${libc_type}"
+}
+
+get_output_dir() {
+    local arch=$1
+    local tool_name=$2
+    local libc_type="${LIBC_TYPE:-}"
+    
+    if [ -z "$libc_type" ]; then
+        if [ -n "${toolchain_type:-}" ]; then
+            libc_type="$toolchain_type"
+        elif echo "${CROSS_COMPILE:-}" | grep -q musl; then
+            libc_type="musl"
+        else
+            libc_type="glibc"
+        fi
+    fi
+    
+    # For directory-based tools (can-utils, shell), append libc suffix
+    echo "/build/output/$arch/${tool_name}.${libc_type}"
+}
+
 validate_args() {
     local min_args=$1
     local usage=$2
@@ -384,6 +422,7 @@ export -f install_binary
 export -f verify_static_binary
 export -f create_cross_cache
 export -f get_binary_size
+export -f get_output_path
 export -f validate_args
 export -f export_cross_compiler
 

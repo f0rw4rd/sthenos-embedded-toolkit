@@ -10,8 +10,9 @@ source "$LIB_DIR/build_helpers.sh"
 source "$LIB_DIR/shared_lib_helpers.sh"
 
 TOOL_NAME="tls-noverify"
+# TODO: find more uniqe name for github main.tar.gz downloads, will be a mess with the next tool from github
 TLS_PRELOADER_URL="https://github.com/f0rw4rd/tls-preloader/archive/refs/heads/main.tar.gz"
-TLS_PRELOADER_SHA512="e3e90942a52011f166bd539faccec405ebb78151f9175f039e5a9176ad1b81401de52f695470715cb0e5063d6c1f10b84d15ba699ac6855954ebb1cb40d78870"
+TLS_PRELOADER_SHA512="c006b39c478261970e75c4008e027423866ed8b6682c4e45701dc8f46fbda4b79124f6213d774acfcae782f6f23f6061e2d252965a522a83a751989a32acb505"
 
 # Main execution when called as script
 main() {

@@ -17,7 +17,10 @@ build_nmap() {
     local build_dir=$(create_build_dir "nmap" "$arch")
     local TOOL_NAME="nmap"
     
-    if check_binary_exists "$arch" "nmap"; then
+    local output_path=$(get_output_path "$arch" "nmap")
+    if [ -f "$output_path" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
+        local size=$(get_binary_size "$output_path")
+        log "[$arch] Already built: $output_path ($size)"
         return 0
     fi
     
@@ -99,7 +102,9 @@ build_nmap() {
     
     if [ -f "nmap" ]; then
         $STRIP nmap
-        cp nmap "/build/output/$arch/nmap"
+        local output_path=$(get_output_path "$arch" "nmap")
+    mkdir -p "$(dirname "$output_path")"
+    cp nmap "$output_path"
         local size=$(ls -lh "/build/output/$arch/nmap" | awk '{print $5}')
         log_tool "nmap" "Built successfully for $arch ($size)"
         cleanup_build_dir "$build_dir"

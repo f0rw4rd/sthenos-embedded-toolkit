@@ -7,16 +7,19 @@ source "$LIB_DIR/common.sh"
 source "$LIB_DIR/core/compile_flags.sh"
 source "$LIB_DIR/build_helpers.sh"
 
-GDB_VERSION="${GDB_VERSION:-16.1}"
-GDB_URL="https://ftp.gnu.org/gnu/gdb/gdb-${GDB_VERSION}.tar.xz"
-GDB_SHA512="cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+GDB_VERSION="${GDB_VERSION:-16.3}"
+GDB_URL="https://mirrors.kernel.org/gnu/gdb/gdb-${GDB_VERSION}.tar.xz"
+GDB_SHA512="fffd6689c3405466a179670b04720dc825e4f210a761f63dd2b33027432f8cd5d1c059c431a5ec9e165eedd1901220b5329d73c522f9a444788888c731b29e9c"
 
 build_gdbserver() {
     local arch=$1
     local build_dir=$(create_build_dir "gdbserver" "$arch")
     local TOOL_NAME="gdbserver"
     
-    if check_binary_exists "$arch" "gdbserver"; then
+    local output_path=$(get_output_path "$arch" "gdbserver")
+    if [ -f "$output_path" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
+        local size=$(get_binary_size "$output_path")
+        log "[$arch] Already built: $output_path ($size)"
         return 0
     fi    
     
@@ -67,7 +70,9 @@ build_gdbserver() {
     }
     
     $STRIP gdbserver/gdbserver
-    cp gdbserver/gdbserver "/build/output/$arch/gdbserver"
+    local output_path=$(get_output_path "$arch" "gdbserver")
+    mkdir -p "$(dirname "$output_path")"
+    cp gdbserver/gdbserver "$output_path"
     
     local size=$(ls -lh "/build/output/$arch/gdbserver" | awk '{print $5}')
     log_tool "gdbserver" "Built successfully for $arch ($size)"

@@ -14,7 +14,10 @@ build_socat() {
     local build_dir=$(create_build_dir "socat" "$arch")
     local TOOL_NAME="socat"
     
-    if check_binary_exists "$arch" "socat"; then
+    local output_path=$(get_output_path "$arch" "socat")
+    if [ -f "$output_path" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
+        local size=$(get_binary_size "$output_path")
+        log "[$arch] Already built: $output_path ($size)"
         return 0
     fi
     
@@ -92,9 +95,11 @@ EOF
     }
     
     $STRIP socat
-    cp socat "/build/output/$arch/socat"
+    local output_path=$(get_output_path "$arch" "socat")
+    mkdir -p "$(dirname "$output_path")"
+    cp socat "$output_path"
     
-    local size=$(ls -lh "/build/output/$arch/socat" | awk '{print $5}')
+    local size=$(get_binary_size "$output_path")
     log_tool "socat" "Built successfully for $arch ($size)"
     
     cleanup_build_dir "$build_dir"
