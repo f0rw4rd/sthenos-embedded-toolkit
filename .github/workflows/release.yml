@@ -1,0 +1,121 @@
+name: Create Release Archives
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_name:
+        description: 'Release name (e.g., v1.4.0, nightly, stable)'
+        required: true
+        type: string
+
+jobs:
+  create-archives:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository with LFS
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+      
+      - name: Pull LFS files
+        run: git lfs pull
+      
+      - name: Get commit info
+        id: commit-info
+        run: |
+          # Get short commit hash (first 7 characters)
+          short_hash=$(git rev-parse --short=7 HEAD)
+          echo "short_hash=$short_hash" >> $GITHUB_OUTPUT
+          
+          # Get full commit hash
+          full_hash=$(git rev-parse HEAD)
+          echo "full_hash=$full_hash" >> $GITHUB_OUTPUT
+          
+          # Get commit date
+          commit_date=$(git show -s --format=%ci HEAD | cut -d' ' -f1)
+          echo "commit_date=$commit_date" >> $GITHUB_OUTPUT
+          
+          echo "Building from commit: $short_hash ($full_hash)"
+          echo "Commit date: $commit_date"
+      
+      - name: Create architecture archives
+        run: |
+          mkdir -p release-archives
+          release_name="${{ github.event.inputs.release_name }}"
+          commit_hash="${{ steps.commit-info.outputs.short_hash }}"
+          
+          # Archive name format: sthenos-<arch>-<release_name>-<commit_hash>.tar.xz
+          echo "Creating archives with format: sthenos-<arch>-${release_name}-${commit_hash}.tar.xz"
+          
+          # Create archive for each architecture
+          for arch_dir in output/*/; do
+            if [ -d "$arch_dir" ]; then
+              arch=$(basename "$arch_dir")
+              archive_name="sthenos-${arch}-${release_name}-${commit_hash}.tar.xz"
+              
+              echo "Creating archive: $archive_name"
+              
+              # Create tar archive with xz compression
+              tar -cJf "release-archives/${archive_name}" -C output "$arch"
+              
+              # Show archive size
+              ls -lh "release-archives/${archive_name}"
+            fi
+          done
+          
+          echo ""
+          echo "=== All archives created ==="
+          ls -lh release-archives/
+      
+      - name: Create checksums
+        run: |
+          cd release-archives
+          sha256sum *.tar.xz > SHA256SUMS
+          sha512sum *.tar.xz > SHA512SUMS
+          echo "Checksums created:"
+          cat SHA256SUMS
+          cd ..
+      
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.release_name }}-${{ steps.commit-info.outputs.short_hash }}
+          release_name: ${{ github.event.inputs.release_name }} (${{ steps.commit-info.outputs.short_hash }})
+          draft: true
+          prerelease: false
+          body: |
+            Sthenos Embedded Toolkit Release
+            
+            Commit: ${{ steps.commit-info.outputs.short_hash }}
+            Full Hash: ${{ steps.commit-info.outputs.full_hash }}
+            Date: ${{ steps.commit-info.outputs.commit_date }}
+      
+      - name: Upload Release Assets
+        run: |
+          # Upload all archives
+          for file in release-archives/*.tar.xz; do
+            filename=$(basename "$file")
+            echo "Uploading: $filename"
+            gh release upload "${{ github.event.inputs.release_name }}-${{ steps.commit-info.outputs.short_hash }}" "$file" --clobber
+          done
+          
+          # Upload checksums
+          echo "Uploading checksum files..."
+          gh release upload "${{ github.event.inputs.release_name }}-${{ steps.commit-info.outputs.short_hash }}" release-archives/SHA256SUMS --clobber
+          gh release upload "${{ github.event.inputs.release_name }}-${{ steps.commit-info.outputs.short_hash }}" release-archives/SHA512SUMS --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Release Summary
+        run: |
+          echo "Release Summary"
+          echo "Release Name: ${{ github.event.inputs.release_name }}"
+          echo "Commit: ${{ steps.commit-info.outputs.short_hash }}"
+          echo "Tag: ${{ github.event.inputs.release_name }}-${{ steps.commit-info.outputs.short_hash }}"
+          echo "Total Archives: $(ls -1 release-archives/*.tar.xz | wc -l)"
+          echo "Total Size: $(du -sh release-archives | cut -f1)"
