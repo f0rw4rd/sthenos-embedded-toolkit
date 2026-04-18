@@ -1,0 +1,27 @@
+--- a/gdb/nat/amd64-linux-siginfo.c
++++ b/gdb/nat/amd64-linux-siginfo.c
+@@ -334,8 +334,12 @@ compat_siginfo_from_siginfo (compat_siginfo_t *to, const siginfo_t *from)
+           to_ptrace.cpt_si_pid = from_ptrace.cpt_si_pid;
+           to_ptrace.cpt_si_uid = from_ptrace.cpt_si_uid;
+         }
++#ifdef __ILP32__
++      /* x32 ABI doesn't have MPX bounds fields */
++#else
+       to->cpt_si_lower = from_ptrace.cpt_si_lower;
+       to->cpt_si_upper = from_ptrace.cpt_si_upper;
++#endif
+       break;
+     }
+ 
+@@ -402,8 +406,12 @@ siginfo_from_compat_siginfo (siginfo_t *to, const compat_siginfo_t *from)
+           from_ptrace.cpt_si_pid = to_ptrace.cpt_si_pid;
+           from_ptrace.cpt_si_uid = to_ptrace.cpt_si_uid;
+         }
++#ifdef __ILP32__
++      /* x32 ABI doesn't have MPX bounds fields */
++#else
+       from_ptrace.cpt_si_lower = from->cpt_si_lower;
+       from_ptrace.cpt_si_upper = from->cpt_si_upper;
++#endif
+       break;
+     }

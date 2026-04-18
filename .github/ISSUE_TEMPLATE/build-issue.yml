@@ -1,0 +1,162 @@
+name: Build Chain Issue
+description: Report issues with building tools (compilation failures, toolchain problems, Docker issues)
+title: "[BUILD] "
+labels: ["build", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Build Chain Issue Report
+        
+        Use this template for issues related to building the tools, including:
+        - Compilation failures
+        - Toolchain problems
+        - Docker build issues
+        - Missing dependencies
+        - Build script errors
+
+  - type: dropdown
+    id: build-type
+    attributes:
+      label: Build Type
+      description: How are you building the tools?
+      options:
+        - Local build with Docker
+        - Local build without Docker
+        - GitHub Actions
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: tool
+    attributes:
+      label: Tool Being Built
+      description: Which tool failed to build? (e.g., strace, busybox, gdbserver)
+      placeholder: "e.g., gdbserver"
+    validations:
+      required: true
+
+  - type: input
+    id: target-arch
+    attributes:
+      label: Target Architecture
+      description: Which architecture were you building for?
+      placeholder: "e.g., arm32v7le, mips32le, x86_64"
+    validations:
+      required: true
+
+  - type: textarea
+    id: build-command
+    attributes:
+      label: Build Command
+      description: Exact command you used to build
+      placeholder: |
+        ./build gdbserver --arch arm32v7le
+        or
+        DEBUG=1 ./build strace --arch mips32le -d
+      render: bash
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-output
+    attributes:
+      label: Error Output
+      description: Paste the error messages from the build (last 50-100 lines)
+      placeholder: |
+        Paste build errors here...
+        Include the actual error messages, not just "build failed"
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: build-environment
+    attributes:
+      label: Build Environment
+      description: Information about your build system
+      placeholder: |
+        - OS: Ubuntu 22.04
+        - Docker version: 24.0.7
+        - Architecture: x86_64
+        - Available RAM: 16GB
+        - Available disk space: 50GB
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: docker-info
+    attributes:
+      label: Docker Information (if applicable)
+      description: Output of `docker version` and `docker info`
+      placeholder: |
+        $ docker version
+        ...
+        
+        $ docker info
+        ...
+      render: shell
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Is this a regression?
+      description: Did this work in a previous version?
+      options:
+        - "Yes - worked in previous version"
+        - "No - new build attempt"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: last-working
+    attributes:
+      label: Last Working Version/Commit
+      description: If regression, which version/commit worked?
+      placeholder: "e.g., commit abc123 or release v1.0.0"
+
+  - type: textarea
+    id: build-log
+    attributes:
+      label: Full Build Log
+      description: |
+        Attach or link to the complete build log if available
+        You can find logs in: logs/build_<tool>_<arch>.log
+      placeholder: |
+        Attach build log file or paste gist/pastebin link
+
+  - type: textarea
+    id: attempted-fixes
+    attributes:
+      label: Attempted Solutions
+      description: What have you tried to fix this issue?
+      placeholder: |
+        - Cleaned Docker cache
+        - Increased Docker memory
+        - Tried different architecture variant
+        - etc.
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other relevant information about the build issue
+      placeholder: |
+        Any additional information that might help diagnose the issue...
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have checked existing issues for duplicates
+          required: true
+        - label: I have included the full error output
+          required: true
+        - label: I have tried with the latest version of the toolkit
+          required: true
+        - label: I have enough disk space (>10GB) and RAM (>4GB)
+          required: true

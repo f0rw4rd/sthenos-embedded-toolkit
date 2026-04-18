@@ -1,0 +1,22 @@
+--- a/sysdeps/linux-gnu/riscv64/plt.c
++++ b/sysdeps/linux-gnu/riscv64/plt.c
+@@ -29,6 +29,19 @@
+ #include "library.h"
+ #include "trace.h"
+ 
++/* Define missing RISC-V ELF constants for musl compatibility */
++#ifndef R_RISCV_IRELATIVE
++#define R_RISCV_IRELATIVE 58
++#endif
++
++#ifndef EF_RISCV_FLOAT_ABI
++#define EF_RISCV_FLOAT_ABI 0x0006
++#endif
++
++#ifndef EF_RISCV_FLOAT_ABI_DOUBLE
++#define EF_RISCV_FLOAT_ABI_DOUBLE 0x0004
++#endif
++
+ GElf_Addr
+ arch_plt_sym_val(struct ltelf *lte, size_t ndx, GElf_Rela *rela)
+ {

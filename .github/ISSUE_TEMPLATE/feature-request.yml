@@ -1,0 +1,74 @@
+name: Feature Request
+description: Suggest new tools, architectures, or improvements
+title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Feature Request
+        
+        Suggest new features, tools, or architectures for the Sthenos Embedded Toolkit.
+
+  - type: dropdown
+    id: feature-type
+    attributes:
+      label: Feature Type
+      description: What kind of feature are you requesting?
+      options:
+        - New tool to add
+        - New architecture support
+        - Build system improvement
+        - Documentation improvement
+        - Performance optimization
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Feature Description
+      description: Describe the feature you'd like to see
+      placeholder: |
+        Clear description of what you want to add or improve...
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: How would this feature be used?
+      placeholder: |
+        Describe specific scenarios where this feature would be helpful...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Current Alternatives
+      description: How do you currently work around this missing feature?
+      placeholder: |
+        What do you do now without this feature?
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Critical - Blocking my work
+        - High - Would significantly improve workflow
+        - Medium - Nice to have
+        - Low - Minor improvement
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I'm willing to help implement this feature
+        - label: I can provide testing for this feature
+        - label: I can write documentation for this feature
