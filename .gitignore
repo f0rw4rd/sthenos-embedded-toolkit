@@ -40,3 +40,9 @@ scripts/remove-comments.sh.tmp
 # OS files
 .DS_Store
 Thumbs.db
+
+# Claude Code local state (agents, permissions)
+.claude/
+
+# Misplaced source tarballs
+argp-standalone-*.tar.gz
