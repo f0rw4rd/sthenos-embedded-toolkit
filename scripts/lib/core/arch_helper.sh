@@ -65,6 +65,17 @@ is_soft_float_arch() {
     esac
 }
 
+# A Zig CC cross-platform target (e.g. x86_64_windows, aarch64_macos,
+# riscv64_freebsd). Legacy GCC-style arch names with underscores
+# (x86_64, x86_64_x32, aarch64_be) are NOT Zig targets.
+is_zig_target() {
+    local arch="$1"
+    case "$arch" in
+        x86_64|x86_64_x32|aarch64_be) return 1 ;;
+    esac
+    [[ "$arch" == *_* ]]
+}
+
 source "$ARCH_HELPER_DIR/../arch_map.sh"
 
 get_musl_toolchain_dir() {
@@ -96,6 +107,7 @@ export -f arch_supports_glibc
 export -f is_glibc_only_arch
 export -f get_glibc_supported_archs
 export -f is_soft_float_arch
+export -f is_zig_target
 export -f map_arch_name
 export -f get_musl_toolchain_dir
 export -f get_glibc_toolchain_dir

@@ -2,6 +2,10 @@
 
 # Operating System target definitions and mappings
 
+# Source guard: prevent errors from re-declaring readonly variables
+[[ -n "${_OS_TARGETS_LOADED:-}" ]] && return 0
+_OS_TARGETS_LOADED=1
+
 # Primary OS targets - well-tested and commonly used
 readonly PRIMARY_OS_TARGETS=(
     "linux"      # Main target, most tools work here
@@ -177,10 +181,116 @@ get_default_abi() {
     esac
 }
 
+# Extract OS family from the current ZIG_TARGET
+# Returns the OS family (e.g., "darwin", "bsd", "unix", "windows")
+get_os_family_from_target() {
+    local target="${ZIG_TARGET:-}"
+    if [[ "$target" == *"macos"* ]] || [[ "$target" == *"darwin"* ]] || \
+       [[ "$target" == *"ios"* ]] || [[ "$target" == *"tvos"* ]] || \
+       [[ "$target" == *"watchos"* ]] || [[ "$target" == *"visionos"* ]]; then
+        echo "darwin"
+    elif [[ "$target" == *"bsd"* ]] || [[ "$target" == *"dragonfly"* ]]; then
+        echo "bsd"
+    elif [[ "$target" == *"windows"* ]]; then
+        echo "windows"
+    elif [[ "$target" == *"wasi"* ]]; then
+        echo "wasm"
+    else
+        echo "unix"
+    fi
+}
+
+# Whether the current Zig target platform supports -static linking.
+# Returns 0 (true) for Linux/Android/Windows/WASI, 1 (false) for Darwin/BSDs.
+platform_supports_static() {
+    if [ "${USE_ZIG:-0}" != "1" ]; then
+        return 0
+    fi
+    local target="${ZIG_TARGET:-}"
+    if [[ "$target" == *"macos"* ]] || [[ "$target" == *"darwin"* ]] || \
+       [[ "$target" == *"bsd"* ]] || [[ "$target" == *"dragonfly"* ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# Whether Zig 0.16.0 ships a libc for the given target triple.
+# Without a bundled libc, system headers (stdio.h, etc.) are unavailable.
+# List extracted from `zig targets` .libc section.
+zig_has_libc() {
+    local triple="$1"
+    case "$triple" in
+        aarch64-freebsd-none|aarch64-freebsd) return 0 ;;
+        aarch64-linux-gnu|aarch64-linux-musl) return 0 ;;
+        aarch64-macos-none|aarch64-macos) return 0 ;;
+        aarch64-netbsd-none|aarch64-netbsd) return 0 ;;
+        aarch64-openbsd-none|aarch64-openbsd) return 0 ;;
+        aarch64-windows-gnu) return 0 ;;
+        aarch64_be-linux-gnu|aarch64_be-linux-musl) return 0 ;;
+        aarch64_be-netbsd-none) return 0 ;;
+        arm-freebsd-eabihf) return 0 ;;
+        arm-linux-gnueabi|arm-linux-gnueabihf) return 0 ;;
+        arm-linux-musleabi|arm-linux-musleabihf) return 0 ;;
+        arm-netbsd-eabi|arm-netbsd-eabihf) return 0 ;;
+        armeb-linux-gnueabi|armeb-linux-gnueabihf) return 0 ;;
+        armeb-linux-musleabi|armeb-linux-musleabihf) return 0 ;;
+        armeb-netbsd-eabi|armeb-netbsd-eabihf) return 0 ;;
+        loongarch64-linux-gnu|loongarch64-linux-gnusf) return 0 ;;
+        loongarch64-linux-musl|loongarch64-linux-muslsf) return 0 ;;
+        m68k-linux-gnu|m68k-linux-musl) return 0 ;;
+        m68k-netbsd-none) return 0 ;;
+        mips-linux-gnueabi|mips-linux-gnueabihf) return 0 ;;
+        mips-linux-musleabi|mips-linux-musleabihf) return 0 ;;
+        mips-netbsd-eabi|mips-netbsd-eabihf) return 0 ;;
+        mipsel-linux-gnueabi|mipsel-linux-gnueabihf) return 0 ;;
+        mipsel-linux-musleabi|mipsel-linux-musleabihf) return 0 ;;
+        mipsel-netbsd-eabi|mipsel-netbsd-eabihf) return 0 ;;
+        mips64-linux-gnuabi64|mips64-linux-gnuabin32) return 0 ;;
+        mips64-linux-muslabi64|mips64-linux-muslabin32) return 0 ;;
+        mips64el-linux-gnuabi64|mips64el-linux-gnuabin32) return 0 ;;
+        mips64el-linux-muslabi64|mips64el-linux-muslabin32) return 0 ;;
+        powerpc-freebsd-eabihf) return 0 ;;
+        powerpc-linux-gnueabi|powerpc-linux-gnueabihf) return 0 ;;
+        powerpc-linux-musleabi|powerpc-linux-musleabihf) return 0 ;;
+        powerpc-netbsd-eabi|powerpc-netbsd-eabihf) return 0 ;;
+        powerpc64-freebsd-none) return 0 ;;
+        powerpc64-linux-gnu|powerpc64-linux-musl) return 0 ;;
+        powerpc64le-freebsd-none) return 0 ;;
+        powerpc64le-linux-gnu|powerpc64le-linux-musl) return 0 ;;
+        riscv32-linux-gnu|riscv32-linux-musl) return 0 ;;
+        riscv64-freebsd-none) return 0 ;;
+        riscv64-linux-gnu|riscv64-linux-musl) return 0 ;;
+        s390x-linux-gnu|s390x-linux-musl) return 0 ;;
+        sparc-linux-gnu) return 0 ;;
+        sparc-netbsd-none) return 0 ;;
+        sparc64-linux-gnu) return 0 ;;
+        sparc64-netbsd-none) return 0 ;;
+        thumb-linux-musleabi|thumb-linux-musleabihf) return 0 ;;
+        thumb-windows-gnu) return 0 ;;
+        thumbeb-linux-musleabi|thumbeb-linux-musleabihf) return 0 ;;
+        wasm32-wasi-musl|wasm32-wasi) return 0 ;;
+        x86-freebsd-none) return 0 ;;
+        x86-linux-gnu|x86-linux-musl) return 0 ;;
+        x86-netbsd-none) return 0 ;;
+        x86-windows-gnu) return 0 ;;
+        x86_64-freebsd-none|x86_64-freebsd) return 0 ;;
+        x86_64-linux-gnu|x86_64-linux-gnux32) return 0 ;;
+        x86_64-linux-musl|x86_64-linux-muslx32) return 0 ;;
+        x86_64-macos-none|x86_64-macos) return 0 ;;
+        x86_64-netbsd-none|x86_64-netbsd) return 0 ;;
+        x86_64-openbsd-none|x86_64-openbsd) return 0 ;;
+        x86_64-windows-gnu) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 export -f is_supported_os
 export -f is_primary_os
 export -f get_os_family
+export -f get_os_family_from_target
 export -f tool_supports_os_family
 export -f print_os_info
 export -f validate_zig_os
 export -f get_default_abi
+export -f platform_supports_static
+export -f zig_has_libc
