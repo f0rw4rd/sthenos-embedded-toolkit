@@ -13,14 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout repository with LFS
+      - name: Checkout main (source + workflow)
         uses: actions/checkout@v4
         with:
-          lfs: true
           fetch-depth: 0
-      
-      - name: Pull LFS files
-        run: git lfs pull
+
+      - name: Fetch binaries from release-artifacts branch
+        run: |
+          git fetch origin release-artifacts
+          git checkout origin/release-artifacts -- output/ .gitattributes
+          git lfs pull --include="output/**"
       
       - name: Get commit info
         id: commit-info
