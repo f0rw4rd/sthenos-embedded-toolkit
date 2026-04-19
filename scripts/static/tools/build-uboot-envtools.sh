@@ -23,26 +23,51 @@ build_uboot_envtools_impl() {
     # The tools/env/Makefile does "override HOSTCC = $(CC)" so CC is used for
     # the actual envtools compilation, while scripts_basic uses the host compiler.
 
-    # Generate .config and headers using sandbox_defconfig (minimal, no real board needed)
-    # HOSTCC must point to the actual host compiler for fixdep and other build scripts
-    make sandbox_defconfig HOSTCC=gcc HOSTLD=ld 2>&1 | tail -5 || return 1
+    # Generate .config and headers using sandbox_defconfig (minimal, no real board needed).
+    # This implicitly builds scripts/basic/fixdep with the real HOST compiler —
+    # so target cross flags MUST NOT leak from the environment (otherwise host
+    # gcc chokes on -mx32, -mabi=ilp32d, -march=<cross>, etc.).
+    env -u CFLAGS -u CXXFLAGS -u LDFLAGS -u CC -u CXX -u LD -u AR -u RANLIB -u STRIP -u NM \
+        make sandbox_defconfig HOSTCC=/usr/bin/gcc HOSTCXX=/usr/bin/g++ HOSTLD=/usr/bin/ld \
+            HOSTCFLAGS= HOSTLDFLAGS= 2>&1 | tail -5 || return 1
 
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")
 
     # Build only the envtools target.
-    # The env tools Makefile does "override HOSTCC = $(CC)" so HOSTCC becomes
-    # the cross compiler. However the Kbuild host program build uses
-    # KBUILD_HOSTCFLAGS and KBUILD_HOSTLDFLAGS for compilation and linking,
-    # so we inject our static flags there.
-    # The top-level scripts_basic target still needs the real host gcc, which
-    # we provide via the initial sandbox_defconfig step above.
-    make envtools \
-        CC="$CC" \
-        CROSS_COMPILE="${CROSS_COMPILE}" \
-        KBUILD_HOSTCFLAGS="$cflags" \
-        KBUILD_HOSTLDFLAGS="$ldflags" \
-        -j$(nproc) || return 1
+    #
+    # u-boot's tools/env/Makefile has "override HOSTCC = $(CC)" which forces the
+    # cross compiler for fw_printenv regardless of the HOSTCC we pass on the
+    # make command line. We exploit this:
+    #   * Globally pass HOSTCC=/usr/bin/gcc with empty HOSTCFLAGS/HOSTLDFLAGS —
+    #     keeps scripts/basic/fixdep (real host tool) buildable with host gcc.
+    #     Also keep u-boot's default KBUILD_HOSTCFLAGS (sane host flags) by NOT
+    #     overriding it on the command line — otherwise the target cross flags
+    #     would be injected into fixdep's compile and link commands.
+    #   * Inject target cross flags per-object via HOSTCFLAGS_<file>.o and
+    #     provide KBUILD_HOSTLDFLAGS for the final link — these only affect the
+    #     tools/env/* objects that participate in fw_printenv (host-compiled
+    #     nominally, but cross-compiled via the "override HOSTCC = $(CC)" above).
+    #   * Strip CFLAGS/LDFLAGS from the env so the Kbuild rule doesn't pick
+    #     them up for scripts_basic re-checks.
+    local envtools_objs="fw_env_main.o fw_env.o crc32.o ctype.o linux_string.o env_attr.o env_flags.o"
+    local host_per_file=()
+    for obj in $envtools_objs; do
+        host_per_file+=("HOSTCFLAGS_${obj}=${cflags}")
+    done
+
+    env -u CFLAGS -u CXXFLAGS -u LDFLAGS \
+        make envtools \
+            CC="$CC" \
+            CROSS_COMPILE="${CROSS_COMPILE}" \
+            HOSTCC=/usr/bin/gcc \
+            HOSTCXX=/usr/bin/g++ \
+            HOSTLD=/usr/bin/ld \
+            HOSTCFLAGS= \
+            HOSTLDFLAGS= \
+            KBUILD_HOSTLDFLAGS="$ldflags" \
+            "${host_per_file[@]}" \
+            -j$(nproc) || return 1
 }
 
 install_uboot_envtools() {

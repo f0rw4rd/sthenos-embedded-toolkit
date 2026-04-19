@@ -43,8 +43,12 @@ build_spidev_tools() {
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")
 
-    # spi-tools uses autotools: run autoreconf then configure
-    autoreconf -i || {
+    # spi-tools uses autotools: run autoreconf then configure.
+    # Strip toolchain from PATH: Buildroot glibc toolchains ship broken autoreconf
+    # wrappers with a hardcoded Perl @INC pointing at /builds/buildroot.org/...
+    # which does not exist. Use only system autotools for this step.
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+        /usr/bin/autoreconf -i || {
         log_tool_error "spidev-tools" "autoreconf failed for $arch"
         cleanup_build_dir "$build_dir"
         return 1

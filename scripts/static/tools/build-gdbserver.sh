@@ -13,26 +13,43 @@ GDB_SHA512="fffd6689c3405466a179670b04720dc825e4f210a761f63dd2b33027432f8cd5d1c0
 
 SUPPORTED_OS="linux,android"  # gdbserver uses Linux ptrace flavor and /proc
 
+# Arches with no upstream gdbserver support in gdb-16.3:
+#   - microblaze, microblazeel, nios2: no case in gdbserver/configure.srv (no
+#     linux-<arch>-low.cc, no register object) — link fails with undefined
+#     references to initialize_low() and using_threads.
+#   - or1k: configure.srv has or1k*-*-linux*, but musl's sys/procfs.h omits
+#     elf_gregset_t/elf_fpregset_t for or1k, causing linux-or1k-low.cc to
+#     fail to compile against the or1k-linux-musl toolchain.
+GDBSERVER_UNSUPPORTED_ARCHS="microblaze microblazeel nios2 or1k"
+
 build_gdbserver() {
     local arch=$1
-    local build_dir=$(create_build_dir "gdbserver" "$arch")
     local TOOL_NAME="gdbserver"
 
     if ! check_tool_support "$SUPPORTED_OS" "$TOOL_NAME"; then
         return 1
     fi
 
+    for unsupported in $GDBSERVER_UNSUPPORTED_ARCHS; do
+        if [ "$arch" = "$unsupported" ]; then
+            log_tool "gdbserver" "SKIP: $arch has no upstream gdbserver support in gdb-${GDB_VERSION}"
+            return 2
+        fi
+    done
+
+    local build_dir=$(create_build_dir "gdbserver" "$arch")
+
     if check_binary_exists "$arch" "gdbserver"; then
         return 0
     fi
-    
+
     setup_toolchain_for_arch "$arch" || return 1
-    
+
     if ! download_and_extract "$GDB_URL" "$build_dir" 0 "$GDB_SHA512"; then
         log_tool_error "gdbserver" "Failed to download and extract source"
         return 1
     fi
-    
+
     cd "$build_dir/gdb-${GDB_VERSION}"
 
     # Patch loongarch64 for musl: gdbserver references elf_{lsx,lasx,lbt}regset_t

@@ -124,9 +124,11 @@ get_link_flags() {
                 m68k_coldfire)
                     # Bootlin m68k-coldfire glibc toolchain has an empty w_fmod.o in libm.a,
                     # so fmod() is unresolved despite -lm. Alias it to __ieee754_fmod which
-                    # is present in e_fmod.o. Callers must ensure -lm is in LIBS so that
-                    # __ieee754_fmod is available to the linker (including during configure).
-                    link_flags="$link_flags -Wl,--defsym,fmod=__ieee754_fmod"
+                    # is present in e_fmod.o. We also append -lm here so the defsym's target
+                    # symbol is always resolvable even for tools whose Makefiles don't pass
+                    # -lm themselves (e.g. can-utils); binutils errors out on --defsym to an
+                    # undefined symbol regardless of whether fmod is actually referenced.
+                    link_flags="$link_flags -Wl,--defsym,fmod=__ieee754_fmod -lm"
                     ;;
             esac
             ;;

@@ -101,7 +101,7 @@ do_static_build() {
     
     # Check if it's a Zig target
     local is_zig_target=false
-    if [[ "$arch" == *"_"* ]] && [[ "$arch" != "x86_64" ]] && [[ "$arch" != "x86_64_x32" ]] && [[ "$arch" != "aarch64_be" ]]; then
+    if [[ "$arch" == *"_"* ]] && [[ "$arch" != "x86_64" ]] && [[ "$arch" != "x86_64_x32" ]] && [[ "$arch" != "aarch64_be" ]] && [[ "$arch" != "m68k_coldfire" ]] && [[ "$arch" != "arcle_hs38" ]]; then
         is_zig_target=true
     fi
     
@@ -269,7 +269,7 @@ run_static_builds() {
         local valid=false
         
         # Check if it's a Zig target (contains underscore and OS suffix)
-        if [[ "$arch" == *"_"* ]] && [[ "$arch" != "x86_64" ]] && [[ "$arch" != "x86_64_x32" ]] && [[ "$arch" != "aarch64_be" ]]; then
+        if [[ "$arch" == *"_"* ]] && [[ "$arch" != "x86_64" ]] && [[ "$arch" != "x86_64_x32" ]] && [[ "$arch" != "aarch64_be" ]] && [[ "$arch" != "m68k_coldfire" ]] && [[ "$arch" != "arcle_hs38" ]]; then
             # Zig target - allow it
             valid=true
         else

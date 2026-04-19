@@ -196,7 +196,7 @@ ensure_toolchain() {
     local arch="$1"
     
     # Skip toolchain check for Zig targets
-    if [[ "$arch" == *"_"* ]] && [[ "$arch" != "x86_64" ]] && [[ "$arch" != "x86_64_x32" ]] && [[ "$arch" != "aarch64_be" ]]; then
+    if [[ "$arch" == *"_"* ]] && [[ "$arch" != "x86_64" ]] && [[ "$arch" != "x86_64_x32" ]] && [[ "$arch" != "aarch64_be" ]] && [[ "$arch" != "m68k_coldfire" ]] && [[ "$arch" != "arcle_hs38" ]]; then
         log "Zig target detected ($arch), skipping traditional toolchain check"
         return 0
     fi

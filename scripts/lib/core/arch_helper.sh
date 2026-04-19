@@ -67,11 +67,12 @@ is_soft_float_arch() {
 
 # A Zig CC cross-platform target (e.g. x86_64_windows, aarch64_macos,
 # riscv64_freebsd). Legacy GCC-style arch names with underscores
-# (x86_64, x86_64_x32, aarch64_be) are NOT Zig targets.
+# (x86_64, x86_64_x32, aarch64_be, m68k_coldfire, arcle_hs38) are NOT
+# Zig targets.
 is_zig_target() {
     local arch="$1"
     case "$arch" in
-        x86_64|x86_64_x32|aarch64_be) return 1 ;;
+        x86_64|x86_64_x32|aarch64_be|m68k_coldfire|arcle_hs38) return 1 ;;
     esac
     [[ "$arch" == *_* ]]
 }

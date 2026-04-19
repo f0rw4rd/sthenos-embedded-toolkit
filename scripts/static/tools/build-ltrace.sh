@@ -101,10 +101,27 @@ build_ltrace() {
         done
     fi
     
+    # ltrace's configure.ac maps powerpc|powerpc64|powerpc64le to HOST_CPU=ppc,
+    # but `powerpcle` (little-endian PPC32) falls through the catch-all and
+    # becomes HOST_CPU=powerpcle. That wires -I.../sysdeps/linux-gnu/powerpcle
+    # and SUBDIRS=powerpcle into the Makefiles, pointing at a directory that
+    # does not exist (the source tree only ships sysdeps/linux-gnu/ppc/, which
+    # handles both endiannesses). Extend the pattern to cover powerpcle, then
+    # force a configure regeneration so the AC_SUBST result reflects the fix.
+    if grep -q 'powerpc|powerpc64|powerpc64le)' configure.ac 2>/dev/null; then
+        log_tool "$arch" "Patching configure.ac to map powerpcle -> ppc"
+        sed -i 's/powerpc|powerpc64|powerpc64le)/powerpc|powerpc64|powerpc64le|powerpcle)/' configure.ac
+        rm -f configure
+    fi
+
     if [ ! -f "configure" ]; then
         log_tool "$arch" "Generating configure script..."
         mkdir -p config/m4 2>/dev/null || true
-        autoreconf -fiv || {
+        # Strip toolchain from PATH: Buildroot glibc toolchains ship broken autoreconf
+        # wrappers with a hardcoded Perl @INC pointing at /builds/buildroot.org/...
+        # which does not exist. Use only system autotools for this step.
+        PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+            /usr/bin/autoreconf -fiv || {
             log_tool "$arch" "ERROR: Failed to generate configure" >&2
             return 1
         }
@@ -140,7 +157,7 @@ build_ltrace() {
         log_tool "$arch" "ERROR: Configure failed" >&2
         return 1
     }
-    
+
     log_tool "$arch" "Building ltrace..."
     CFLAGS="$cflags -I${elfutils_dir}/include" \
     LDFLAGS="$ldflags -L${elfutils_dir}/lib" \
@@ -153,14 +170,34 @@ build_ltrace() {
     
     log_tool "$arch" "Linking ltrace..."
     
+    # ltrace's demangle.c calls __cxa_demangle, which lives in libstdc++ (it
+    # pulls in libsupc++ transitively for unwind). Prefer libstdc++.a so the
+    # symbol actually resolves; fall back to libsupc++.a only if libstdc++.a
+    # is missing (some stripped toolchains).
     local cxx_libs=""
     local toolchain_prefix="${CC%-gcc}"
-    if [ -f "/build/toolchains-musl/${toolchain_prefix}-cross/${toolchain_prefix}/lib/libsupc++.a" ]; then
-        cxx_libs="/build/toolchains-musl/${toolchain_prefix}-cross/${toolchain_prefix}/lib/libsupc++.a"
-    elif [ -f "/build/toolchains/${toolchain_prefix}/${toolchain_prefix}/lib/libsupc++.a" ]; then
-        cxx_libs="/build/toolchains/${toolchain_prefix}/${toolchain_prefix}/lib/libsupc++.a"
+    local -a cxx_search_roots=(
+        "/build/toolchains-glibc/${toolchain_prefix}/${toolchain_prefix}/lib64"
+        "/build/toolchains-glibc/${toolchain_prefix}/${toolchain_prefix}/lib"
+        "/build/toolchains-musl/${toolchain_prefix}-cross/${toolchain_prefix}/lib"
+        "/build/toolchains/${toolchain_prefix}/${toolchain_prefix}/lib"
+    )
+    for cxx_root in "${cxx_search_roots[@]}"; do
+        if [ -f "${cxx_root}/libstdc++.a" ]; then
+            cxx_libs="${cxx_root}/libstdc++.a"
+            [ -f "${cxx_root}/libsupc++.a" ] && cxx_libs="${cxx_libs} ${cxx_root}/libsupc++.a"
+            break
+        fi
+    done
+    if [ -z "$cxx_libs" ]; then
+        for cxx_root in "${cxx_search_roots[@]}"; do
+            if [ -f "${cxx_root}/libsupc++.a" ]; then
+                cxx_libs="${cxx_root}/libsupc++.a"
+                break
+            fi
+        done
     fi
-    
+
     ${CC} $cflags $ldflags -o ltrace \
         main.o \
         ./.libs/libltrace.a \

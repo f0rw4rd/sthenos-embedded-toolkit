@@ -1,0 +1,54 @@
+Fix ltrace sparc sysdeps for sparc64 builds.
+
+The sparc sysdeps are used for both 32-bit sparc and 64-bit sparc64 (see
+configure.ac `sun4u|sparc64)	HOST_CPU="sparc"`). On sparc64, the glibc
+asm/ptrace.h `struct pt_regs` uses `tpc`/`tnpc`/`tstate` (trap-frame
+layout) instead of the 32-bit `pc`/`npc`/`psr`. regs.c unconditionally
+accesses `.pc`, which breaks on sparc64. Select the correct field name
+at compile time via __arch64__.
+
+plt.c dereferences `struct library_symbol` without including library.h,
+so the struct is only forward-declared and GCC rejects the member access
+as incomplete type. Add the missing include.
+
+--- a/sysdeps/linux-gnu/sparc/regs.c
++++ b/sysdeps/linux-gnu/sparc/regs.c
+@@ -27,12 +27,18 @@
+ #include "proc.h"
+ #include "common.h"
+
++#ifdef __arch64__
++# define SPARC_PC_FIELD tpc
++#else
++# define SPARC_PC_FIELD pc
++#endif
++
+ void *
+ get_instruction_pointer(struct process *proc)
+ {
+ 	proc_archdep *a = (proc_archdep *) (proc->arch_ptr);
+ 	if (a->valid)
+-		return (void *)a->regs.pc;
++		return (void *)a->regs.SPARC_PC_FIELD;
+ 	return (void *)-1;
+ }
+
+@@ -41,7 +47,7 @@ set_instruction_pointer(struct process *proc, void *addr)
+ {
+ 	proc_archdep *a = (proc_archdep *) (proc->arch_ptr);
+ 	if (a->valid)
+-		a->regs.pc = (long)addr;
++		a->regs.SPARC_PC_FIELD = (long)addr;
+ }
+
+ void *
+--- a/sysdeps/linux-gnu/sparc/plt.c
++++ b/sysdeps/linux-gnu/sparc/plt.c
+@@ -20,6 +20,7 @@
+
+ #include <gelf.h>
+ #include "proc.h"
++#include "library.h"
+ #include "common.h"
+
+ GElf_Addr

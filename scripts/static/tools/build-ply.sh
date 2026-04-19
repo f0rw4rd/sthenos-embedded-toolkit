@@ -82,7 +82,17 @@ build_tool() {
     local ldflags=$(get_link_flags "$arch" "static")
     
     # Already in the extracted directory from download_and_extract with strip_components=1
-    
+
+    # ply 2.4.0 ships src/libply/arch/powerpc.c but configure derives the arch
+    # source file from $host_cpu. On ppc64le, $host_cpu is "powerpc64le", so make
+    # fails with "No rule to make target 'arch/powerpc64le.c'". Upstream doesn't
+    # differentiate 32- vs 64-bit or BE vs LE in the libply/arch layer, so we
+    # alias powerpc64le.c to powerpc.c (idempotent; safe to run on any arch).
+    if [ -f src/libply/arch/powerpc.c ] && [ ! -f src/libply/arch/powerpc64le.c ]; then
+        log_tool "$arch" "Adding missing src/libply/arch/powerpc64le.c (alias of powerpc.c)"
+        cp src/libply/arch/powerpc.c src/libply/arch/powerpc64le.c
+    fi
+
     log_tool "$arch" "Setting up BSD queue.h for ply..."
     mkdir -p include/sys
     
@@ -91,8 +101,10 @@ build_tool() {
         cp /usr/include/sys/queue.h include/sys/queue.h
     else
         log_tool "$arch" "WARNING: System queue.h not found, downloading standalone version..."
-        local queue_url="https://raw.githubusercontent.com/freebsd/freebsd-src/main/sys/sys/queue.h"
-        local queue_sha512="cc94b138de601c9e1804384496e691ad400ef1351c0b81f8d24d77449d7f17b11c5fefe0fb1c302e927e824f9e5c89895f7594336f2bf81aed7c40740d3e9ae6"
+        # Pinned to an immutable release tag instead of the rolling `main` branch
+        # so the SHA512 doesn't drift when upstream edits queue.h.
+        local queue_url="https://raw.githubusercontent.com/freebsd/freebsd-src/release/14.2.0/sys/sys/queue.h"
+        local queue_sha512="79f97a0df4e06c2011e9c0c64546904f663514fa7b3ff8f0d471d4c5dc9551e372056f5bcce585811079886cb25684910ad1d04c3e9475fd549cded53ba6112b"
         
         if wget -q -O include/sys/queue.h.tmp "$queue_url"; then
             local actual_sha512=$(sha512sum include/sys/queue.h.tmp | cut -d' ' -f1)

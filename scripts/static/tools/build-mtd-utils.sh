@@ -62,9 +62,13 @@ build_mtd_utils() {
         export_cross_compiler "$CROSS_COMPILE"
     fi
 
-    # Generate configure script (GitHub archive has no pre-generated configure)
+    # Generate configure script (GitHub archive has no pre-generated configure).
+    # Strip toolchain from PATH: Buildroot glibc toolchains ship broken autoreconf
+    # wrappers with a hardcoded Perl @INC pointing at /builds/buildroot.org/...
+    # which does not exist. Use only system autotools for this step.
     log_tool "mtd-utils" "Running autoreconf..."
-    autoreconf --force --install --symlink || {
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+        /usr/bin/autoreconf --force --install --symlink || {
         log_tool_error "mtd-utils" "autoreconf failed for $arch"
         return 1
     }

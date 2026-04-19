@@ -56,6 +56,15 @@ build_busybox() {
         sed -i 's/CONFIG_SHA1_HWACCEL=y/# CONFIG_SHA1_HWACCEL is not set/' .config
         sed -i 's/CONFIG_SHA256_HWACCEL=y/# CONFIG_SHA256_HWACCEL is not set/' .config
     fi
+
+    # riscv32 (rv32) lacks __NR_settimeofday in its syscall table; disable hwclock
+    # which unconditionally references SYS_settimeofday in util-linux/hwclock.c.
+    if [ "$arch" = "riscv32" ]; then
+        log_tool "busybox" "Disabling CONFIG_HWCLOCK for riscv32 (no SYS_settimeofday)"
+        sed -i 's/^CONFIG_HWCLOCK=y/# CONFIG_HWCLOCK is not set/' .config
+        sed -i 's/^CONFIG_FEATURE_HWCLOCK_LONG_OPTIONS=y/# CONFIG_FEATURE_HWCLOCK_LONG_OPTIONS is not set/' .config
+        sed -i 's/^CONFIG_FEATURE_HWCLOCK_ADJTIME_FHS=y/# CONFIG_FEATURE_HWCLOCK_ADJTIME_FHS is not set/' .config
+    fi
     
     if [ "$variant" = "nodrop" ]; then
         log_tool "busybox" "Applying nodrop modifications..."

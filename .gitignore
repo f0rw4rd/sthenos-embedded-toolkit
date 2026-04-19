@@ -41,8 +41,12 @@ scripts/remove-comments.sh.tmp
 .DS_Store
 Thumbs.db
 
-# Claude Code local state (agents, permissions)
+# AI tool local state and instructions
 .claude/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
 
 # Misplaced source tarballs
 argp-standalone-*.tar.gz

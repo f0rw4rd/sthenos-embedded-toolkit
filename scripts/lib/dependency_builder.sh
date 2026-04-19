@@ -712,8 +712,12 @@ configure_argp_standalone() {
     if [ -f "/build/patches/argp-standalone/gnu89-inline.patch" ]; then
         patch -p1 < /build/patches/argp-standalone/gnu89-inline.patch || true
     fi
-    
-    autoreconf -vif
+
+    # Strip toolchain from PATH: Buildroot glibc toolchains ship broken autoreconf
+    # wrappers with a hardcoded Perl @INC pointing at /builds/buildroot.org/...
+    # which does not exist. Use only system autotools for this step.
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+        /usr/bin/autoreconf -vif
     
     local host_triplet
     if [ -n "${CC}" ]; then

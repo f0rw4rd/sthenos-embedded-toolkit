@@ -167,6 +167,16 @@ build_openssl_cli() {
 
     cd "$build_dir/openssl-${OPENSSL_VERSION}"
 
+    # musl's strerror_r is POSIX-signature (returns int) even under _GNU_SOURCE.
+    # OpenSSL 1.1.1w's crypto/o_str.c hardcodes the GNU signature when
+    # _GNU_SOURCE is defined, causing -Wint-conversion errors with strict GCC
+    # (e.g., loongarch64-unknown-linux-musl-cross 13.x). Patch the GNU branch
+    # guard to also require glibc -- musl defines neither __GLIBC__ nor the
+    # char*-returning strerror_r, so it falls through to the POSIX/XSI branch.
+    if [ "${LIBC_TYPE:-}" = "musl" ] || [[ "${CROSS_COMPILE:-}" == *musl* ]]; then
+        sed -i 's|^#elif defined(_GNU_SOURCE)$|#elif defined(_GNU_SOURCE) \&\& defined(__GLIBC__)|' crypto/o_str.c
+    fi
+
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")
     export CFLAGS="$cflags"
