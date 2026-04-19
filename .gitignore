@@ -1,7 +1,8 @@
-# Build outputs - tracked with Git LFS
-# output/  # Now tracked with LFS
+# Build outputs (binaries live on the release-artifacts branch / GitHub Releases)
+output/
 output-preload/
 output-glibc-static/
+output-zig/
 
 # Build logs
 logs/
