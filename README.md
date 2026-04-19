@@ -21,20 +21,15 @@ Fast, reliable pipeline for building static debugging and analysis tools for emb
 
 ## Download Pre-built Binaries
 
-**Download binaries directly from GitHub:**
-👉 **[output folder](https://github.com/f0rw4rd/sthenos-embedded-toolkit/tree/main/output)**
+- **Per-arch tarballs with checksums:** [GitHub Releases](https://github.com/f0rw4rd/sthenos-embedded-toolkit/releases)
+- **Browse individual binaries:** [release-artifacts branch](https://github.com/f0rw4rd/sthenos-embedded-toolkit/tree/release-artifacts/output)
 
 Select your architecture → Download the tools you need.
 
 ## Building from Source
 
-**Important:** If you have cloned this repository with Git LFS enabled, you need to clear the LFS placeholder files before building:
-
 ```bash
-# Clear LFS files from output directory
-rm -rf output/*
-
-# Then build all tools for all architectures
+# Build all tools for all architectures
 ./build
 
 # Or build specific tool for specific architecture
@@ -83,11 +78,6 @@ rm -rf output/*
 - Docker
 - 20GB+ free disk space
 - Internet connection
-
-## Download Pre-built Binaries
-
-**Download binaries directly from GitHub:**
-👉 **[output folder](https://github.com/f0rw4rd/sthenos-embedded-toolkit/tree/main/output)**
 
 ### Find Your Architecture
 
