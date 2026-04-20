@@ -1,0 +1,179 @@
+Add Windows (winsock2) portability layer to microsocks.
+
+Upstream microsocks is POSIX-only. Zig cc's x86_64-windows-gnu target
+(mingw-w64 headers) lacks <sys/socket.h>, <netinet/in.h>, <arpa/inet.h>,
+<poll.h>, and SIGPIPE. This patch ifdef-guards all POSIX-specific
+includes, swaps poll() for WSAPoll(), read()/write() on sockets for
+recv()/send(), close() for closesocket(), provides dprintf/usleep
+shims (mingw-w64 doesn't expose them by default), and drops SIGPIPE
+handling on Windows. Linux/BSD/macOS builds are unaffected.
+
+--- a/server.h	2026-04-20 19:10:57.203333586 +0200
++++ b/server.h	2026-04-20 19:11:25.673333590 +0200
+@@ -4,9 +4,15 @@
+ #undef _POSIX_C_SOURCE
+ #define _POSIX_C_SOURCE 200809L
+ 
++#ifdef _WIN32
++#include <winsock2.h>
++#include <ws2tcpip.h>
++#include <windows.h>
++#else
+ #include <sys/socket.h>
+ #include <netdb.h>
+ #include <netinet/in.h>
++#endif
+ 
+ #pragma RcB2 DEP "server.c"
+ 
+--- a/server.c	2026-04-20 19:10:57.203333586 +0200
++++ b/server.c	2026-04-20 19:11:32.640000258 +0200
+@@ -1,7 +1,14 @@
+ #include "server.h"
+ #include <stdio.h>
+ #include <string.h>
++#ifndef _WIN32
+ #include <unistd.h>
++#endif
++
++#ifdef _WIN32
++/* On Windows, sockets are SOCKET handles, not fds; use closesocket(). */
++#define close(fd) closesocket(fd)
++#endif
+ 
+ int resolve(const char *host, unsigned short port, struct addrinfo** addr) {
+ 	struct addrinfo hints = {
+@@ -45,7 +52,7 @@
+ 		if((listenfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) < 0)
+ 			continue;
+ 		int yes = 1;
+-		setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
++		setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (const char*)&yes, sizeof(int));
+ 		if(bind(listenfd, p->ai_addr, p->ai_addrlen) < 0) {
+ 			close(listenfd);
+ 			listenfd = -1;
+--- a/sockssrv.c	2026-04-20 19:10:57.203333586 +0200
++++ b/sockssrv.c	2026-04-20 19:14:57.940000290 +0200
+@@ -21,6 +21,53 @@
+ 
+ */
+ 
++#ifdef _WIN32
++/* Windows (winsock2) build. Must include winsock2.h before windows.h. */
++#include <winsock2.h>
++#include <ws2tcpip.h>
++#include <windows.h>
++#include <stdlib.h>
++#include <string.h>
++#include <stdio.h>
++#include <pthread.h>
++#include <errno.h>
++#include <limits.h>
++/* MinGW-w64 provides getopt via <unistd.h>. */
++#include <unistd.h>
++#include "server.h"
++#include "sblist.h"
++
++/* Map POSIX socket/poll calls to winsock equivalents. On Windows, SOCKETs
++   are distinct from file descriptors, so read/write/close don't work on
++   them directly. These macros are scoped to this translation unit. */
++#define poll(fds, nfds, timeout) WSAPoll((fds), (nfds), (timeout))
++#define close_sock(fd) closesocket(fd)
++#define read(fd, buf, n)  recv((fd), (char*)(buf), (int)(n), 0)
++#define write(fd, buf, n) send((fd), (const char*)(buf), (int)(n), 0)
++
++/* usleep() is sometimes absent from MinGW configurations; provide a
++   Sleep()-based shim that accepts microseconds. */
++static int usleep_ms(unsigned usec) { Sleep((usec + 999) / 1000); return 0; }
++#define usleep(u) usleep_ms(u)
++
++/* dprintf() is POSIX.1-2008 but not exposed by mingw-w64 headers on a
++   default Windows build. Provide a thin vsnprintf + _write shim so the
++   existing dolog()/usage() call sites compile unchanged. */
++#include <stdarg.h>
++#include <io.h>
++static int ms_dprintf(int fd, const char *fmt, ...) {
++	char buf[2048];
++	va_list ap;
++	va_start(ap, fmt);
++	int n = vsnprintf(buf, sizeof buf, fmt, ap);
++	va_end(ap);
++	if(n < 0) return n;
++	if((size_t)n > sizeof buf) n = (int)sizeof buf;
++	return _write(fd, buf, n);
++}
++#define dprintf ms_dprintf
++
++#else  /* !_WIN32: original POSIX includes */
+ #define _GNU_SOURCE
+ #include <unistd.h>
+ #define _POSIX_C_SOURCE 200809L
+@@ -35,6 +82,8 @@
+ #include <limits.h>
+ #include "server.h"
+ #include "sblist.h"
++#define close_sock(fd) close(fd)
++#endif
+ 
+ /* timeout in microseconds on resource exhaustion to prevent excessive
+    cpu usage. */
+@@ -161,8 +210,13 @@
+ 	int fd = socket(raddr->ai_family, SOCK_STREAM, 0);
+ 	if(fd == -1) {
+ 		eval_errno:
+-		if(fd != -1) close(fd);
++		if(fd != -1) close_sock(fd);
+ 		freeaddrinfo(remote);
++#ifdef _WIN32
++		/* winsock stores the last error separately from errno; pull it
++		   over so the switch below can classify it. */
++		errno = WSAGetLastError();
++#endif
+ 		switch(errno) {
+ 			case ETIMEDOUT:
+ 				return -EC_TTL_EXPIRED;
+@@ -359,9 +413,9 @@
+ 	int remotefd = handshake(t);
+ 	if(remotefd != -1) {
+ 		copyloop(t->client.fd, remotefd);
+-		close(remotefd);
++		close_sock(remotefd);
+ 	}
+-	close(t->client.fd);
++	close_sock(t->client.fd);
+ 	t->done = 1;
+ 	return 0;
+ }
+@@ -409,6 +463,13 @@
+ }
+ 
+ int main(int argc, char** argv) {
++#ifdef _WIN32
++	WSADATA wsa;
++	if(WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
++		dprintf(2, "WSAStartup failed\n");
++		return 1;
++	}
++#endif
+ 	int ch;
+ 	const char *listenip = "0.0.0.0";
+ 	char *p, *q;
+@@ -468,7 +529,9 @@
+ 		dprintf(2, "error: -1/-w options must be used together with user/pass\n");
+ 		return 1;
+ 	}
++#ifndef _WIN32
+ 	signal(SIGPIPE, SIG_IGN);
++#endif
+ 	struct server s;
+ 	sblist *threads = sblist_new(sizeof (struct thread*), 8);
+ 	if(server_setup(&s, listenip, port)) {
+@@ -491,7 +554,7 @@
+ 		}
+ 		curr->client = c;
+ 		if(!sblist_add(threads, &curr)) {
+-			close(curr->client.fd);
++			close_sock(curr->client.fd);
+ 			free(curr);
+ 			oom:
+ 			dolog("rejecting connection due to OOM\n");
