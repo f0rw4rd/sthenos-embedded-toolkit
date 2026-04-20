@@ -31,23 +31,25 @@ build_shell_static() {
     local ldflags=$(get_link_flags "$arch" "static")
 
     local extra_libs=""
-    if [[ "${ZIG_TARGET:-}" == *"windows"* ]]; then
-        extra_libs="-lws2_32"
+    local bin_ext=""
+    if [[ "${ZIG_TARGET:-}" == *"windows"* ]] || [[ "$arch" == *_windows ]]; then
+        extra_libs="-lws2_32 -ladvapi32"
+        bin_ext=".exe"
     fi
 
     local tools="shell-bind shell-env shell-helper shell-reverse shell-fifo shell-loader"
-    
+
     local output_dir=$(get_output_dir "$arch" "shell")
     mkdir -p "$output_dir"
-    
+
     local build_dir="/tmp/build-shell-$arch-$$"
     mkdir -p "$build_dir"
     cd "$build_dir"
-    
+
     local built=0
     for tool in $tools; do
         local source="/build/shared-libs/${tool}.c"
-        local output="$output_dir/$tool"
+        local output="$output_dir/${tool}${bin_ext}"
         
         if [ -s "$output" ] && [ "${SKIP_IF_EXISTS:-true}" = "true" ]; then
             log "Skipping $tool (already exists)"
@@ -63,20 +65,22 @@ build_shell_static() {
         
         log "Building $tool..."
 
+        local link_target="${tool}${bin_ext}"
+
         if ! $CC $cflags -DENABLE_MAIN -c "$source" -o "${tool}.o" 2>&1; then
             log_error "Failed to compile $tool"
             continue
         fi
 
-        if ! $CC $ldflags -o "$tool" "${tool}.o" $extra_libs 2>&1; then
+        if ! $CC $ldflags -o "$link_target" "${tool}.o" $extra_libs 2>&1; then
             log_error "Failed to link $tool"
             continue
         fi
 
-        $STRIP "$tool" 2>&1 || true
+        $STRIP "$link_target" 2>&1 || true
 
-        if [ ! -s "$tool" ]; then
-            log_error "Strip produced empty binary: $tool"
+        if [ ! -s "$link_target" ]; then
+            log_error "Strip produced empty binary: $link_target"
             continue
         fi
 
@@ -84,7 +88,7 @@ build_shell_static() {
         # `zig cc -static` mistakes it for a zig build artifact and removes it
         # during linking, so we recreate the directory right before copying.
         mkdir -p "$output_dir"
-        cp "$tool" "$output"
+        cp "$link_target" "$output"
         chmod +x "$output"
         
         local size=$(ls -lh "$output" 2>/dev/null | awk '{print $5}')
