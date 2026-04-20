@@ -9,7 +9,7 @@ source "$LIB_DIR/core/compile_flags.sh"
 source "$LIB_DIR/build_helpers.sh"
 source "$LIB_DIR/source_versions.sh"
 
-SUPPORTED_OS="linux,android,freebsd,openbsd,netbsd"  # macOS needs SystemConfiguration framework (absent in Zig Darwin shim); Windows needs windres
+SUPPORTED_OS="linux,android,freebsd,openbsd,netbsd,macos"  # Windows needs windres
 
 build_curl() {
     local arch=$1
@@ -35,7 +35,25 @@ build_curl() {
     fi
     
     cd "$build_dir/curl-${CURL_VERSION}"
-    
+
+    # Zig's Darwin sysroot lacks the SystemConfiguration framework headers.
+    # lib/macos.c only calls SCDynamicStoreCopyProxies to prime IPv4->IPv6
+    # synthesis on real macOS hardware; cross-built binaries can safely skip
+    # it. Stub the file so the guard never includes the missing header.
+    case "$arch" in
+        *_macos|*_darwin)
+            cat > lib/macos.c << 'EOF'
+#include "curl_setup.h"
+#include <curl/curl.h>
+#include "macos.h"
+#ifdef CURL_MACOS_CALL_COPYPROXIES
+#undef Curl_macos_init
+CURLcode Curl_macos_init(void) { return CURLE_OK; }
+#endif
+EOF
+            ;;
+    esac
+
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")
     
@@ -143,8 +161,14 @@ build_curl() {
     }
     
     log_tool "curl" "Building curl for $arch..."
-    
-    make -j$(nproc) LDFLAGS="$ldflags -all-static" || {
+
+    # libtool -all-static forces a static executable; Darwin/BSD can't do that.
+    local make_ldflags="$ldflags"
+    if platform_supports_static; then
+        make_ldflags="$ldflags -all-static"
+    fi
+
+    make -j$(nproc) LDFLAGS="$make_ldflags" || {
         log_tool_error "curl" "Build failed for $arch"
         cleanup_build_dir "$build_dir"
         return 1

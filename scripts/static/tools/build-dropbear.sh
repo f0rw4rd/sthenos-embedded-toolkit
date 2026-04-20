@@ -11,7 +11,7 @@ DROPBEAR_VERSION="${DROPBEAR_VERSION:-2022.83}"
 DROPBEAR_URL="https://matt.ucc.asn.au/dropbear/releases/dropbear-${DROPBEAR_VERSION}.tar.bz2"
 DROPBEAR_SHA512="c63afa615d64b0c8c5e739c758eb8ae277ecc36a4223b766bf562702de69910904cbc3ea98d22989df478ae419e1f81057fe1ee09616c80cb859f58f44175422"
 
-SUPPORTED_OS="linux,android,freebsd,openbsd,netbsd"  # macOS: loginrec.c needs utmp replacement
+SUPPORTED_OS="linux,android,freebsd,openbsd,netbsd,macos"
 
 build_dropbear() {
     local arch=$1
@@ -39,6 +39,14 @@ build_dropbear() {
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")
     
+    # Darwin: utmpx.h forward-declares struct utmp but leaves it incomplete,
+    # and its login()/logout()/logwtmp() ship without headers. autoconf is
+    # eager to detect them — disable the login-record code path entirely.
+    local extra_configure=""
+    case "$arch" in
+        *_macos|*_darwin) extra_configure="--disable-loginfunc" ;;
+    esac
+
     CFLAGS="${CFLAGS:-} $cflags" \
     LDFLAGS="${LDFLAGS:-} $ldflags" \
     ./configure \
@@ -53,12 +61,28 @@ build_dropbear() {
         --disable-pututline \
         --disable-pututxline \
         --enable-static \
+        $extra_configure \
         || {
         log_tool_error "dropbear" "Configure failed for $arch"
         cleanup_build_dir "$build_dir"
         return 1
     }
     
+    # Darwin: autoconf's link-probes fill in HAVE_UTMP_H/HAVE_UTMPX_H/
+    # HAVE_LASTLOG_H/HAVE_PATHS_H because Zig's sysroot ships the headers,
+    # but utmpx.h forward-declares struct utmp without defining members.
+    # loginrec.c gates its members-access on HAVE_UTMP_H, so strip those.
+    # Also: Darwin ships openpty() in <util.h>, not <pty.h>; sshpty.c
+    # only includes <pty.h>, so inject util.h at the top.
+    case "$arch" in
+        *_macos|*_darwin)
+            sed -i -E 's@^#define (HAVE_UTMP_H|HAVE_UTMPX_H|HAVE_LASTLOG_H|HAVE_PATHS_H) 1$@/* & disabled on Darwin */@' config.h
+            # util.h isn't in the Zig Darwin sysroot; the real macOS libSystem
+            # exposes openpty(). Declare it manually so the ptmx helper compiles.
+            sed -i '1i#include <termios.h>\n#include <sys/ioctl.h>\nextern int openpty(int *, int *, char *, struct termios *, struct winsize *);\nextern int login_tty(int);' sshpty.c
+            ;;
+    esac
+
     # Check if configure detected crypt() support.
     # Bootlin glibc toolchains often lack libcrypt, so crypt() is unavailable.
     # Musl includes crypt built-in, so this only affects glibc-only arches.
@@ -90,7 +114,12 @@ EOF
         static_arg="STATIC=0"
     fi
 
-    make -j$(nproc) PROGRAMS="dropbear dbclient dropbearkey scp" $static_arg || {
+    local _mj=$(nproc)
+    case "$arch" in
+        *_macos|*_darwin) _mj=1 ;;
+    esac
+
+    make -j$_mj PROGRAMS="dropbear dbclient dropbearkey scp" $static_arg || {
         log_tool_error "dropbear" "Build failed for $arch"
         cleanup_build_dir "$build_dir"
         return 1

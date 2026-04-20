@@ -9,7 +9,7 @@ source "$LIB_DIR/core/compile_flags.sh"
 source "$LIB_DIR/build_helpers.sh"
 source "$LIB_DIR/source_versions.sh"
 
-SUPPORTED_OS="linux,android,freebsd,openbsd,netbsd"  # macOS needs SystemConfiguration framework
+SUPPORTED_OS="linux,android,freebsd,openbsd,netbsd,macos"
 
 build_curl_full() {
     local arch=$1
@@ -58,7 +58,24 @@ build_curl_full() {
     fi
     
     cd "$build_dir/curl-${CURL_VERSION}"
-    
+
+    # Zig's Darwin sysroot lacks SystemConfiguration framework headers.
+    # Replace lib/macos.c with a stub that still provides Curl_macos_init
+    # under CURL_MACOS_CALL_COPYPROXIES so easy.c's reference resolves.
+    case "$arch" in
+        *_macos|*_darwin)
+            cat > lib/macos.c << 'EOF'
+#include "curl_setup.h"
+#include <curl/curl.h>
+#include "macos.h"
+#ifdef CURL_MACOS_CALL_COPYPROXIES
+#undef Curl_macos_init
+CURLcode Curl_macos_init(void) { return CURLE_OK; }
+#endif
+EOF
+            ;;
+    esac
+
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")
     
@@ -152,8 +169,13 @@ build_curl_full() {
     }
     
     log_tool "curl-full" "Building curl-full for $arch..."
-    
-    make -j$(nproc) LDFLAGS="$ldflags -all-static" || {
+
+    local make_ldflags="$ldflags"
+    if platform_supports_static; then
+        make_ldflags="$ldflags -all-static"
+    fi
+
+    make -j$(nproc) LDFLAGS="$make_ldflags" || {
         log_tool_error "curl-full" "Build failed for $arch"
         cleanup_build_dir "$build_dir"
         return 1
