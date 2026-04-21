@@ -31,16 +31,16 @@ RUN apt-get update && apt-get install -y \
     sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Zig 0.15.1
+# Install Zig 0.16.0
 RUN cd /tmp && \
-    wget https://ziglang.org/download/0.15.1/zig-x86_64-linux-0.15.1.tar.xz && \
-    echo "b48538e3196638faee0756f03db195d5460ff2ea2c05c42c9cf836a90907e324083d3e4d1d4c25197c8f4fed11ebca10a7c56f19f2e108abfb411c7a0b5582ea  zig-x86_64-linux-0.15.1.tar.xz" | sha512sum -c - && \
-    tar xf zig-x86_64-linux-0.15.1.tar.xz && \
-    mv zig-x86_64-linux-0.15.1 /opt/zig && \
+    wget https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz && \
+    echo "7883953b20974c487318a134d826bf87e76e9c80f9be1aebf63a0cf362c7e03291842ed3acff61b1892efa85dc72ef37bd60da301f266675c47623e4808a4895  zig-x86_64-linux-0.16.0.tar.xz" | sha512sum -c - && \
+    tar xf zig-x86_64-linux-0.16.0.tar.xz && \
+    mv zig-x86_64-linux-0.16.0 /opt/zig && \
     ln -s /opt/zig/zig /usr/local/bin/zig && \
-    rm zig-x86_64-linux-0.15.1.tar.xz
+    rm zig-x86_64-linux-0.16.0.tar.xz
 
-RUN mkdir -p /build/sources /build/toolchains-musl /build/toolchains-glibc /build/deps-cache && \
+RUN mkdir -p /build/sources /build/toolchains-musl /build/toolchains-glibc /build/toolchains-uclibc /build/deps-cache && \
     mkdir -p /build/output /build/logs && \
     mkdir -p /build/scripts
 

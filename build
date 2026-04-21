@@ -219,6 +219,7 @@ run_in_container() {
         "-v" "toolchains-cache:/build/toolchains"
         "-v" "toolchain-musl:/build/toolchains-musl"
         "-v" "toolchain-glibc:/build/toolchains-glibc"
+        "-v" "toolchain-uclibc:/build/toolchains-uclibc"
         "-v" "deps-cache:/build/deps-cache"
     )
     
@@ -336,14 +337,14 @@ for i in $(seq 1 $#); do
             if [ $next_idx -le $# ]; then
                 LIBC_VALUE="${!next_idx}"
                 # Validate libc type
-                if [ "$LIBC_VALUE" != "musl" ] && [ "$LIBC_VALUE" != "glibc" ]; then
-                    echo "Error: Invalid libc type '$LIBC_VALUE'. Must be 'musl' or 'glibc'."
+                if [ "$LIBC_VALUE" != "musl" ] && [ "$LIBC_VALUE" != "glibc" ] && [ "$LIBC_VALUE" != "uclibc" ]; then
+                    echo "Error: Invalid libc type '$LIBC_VALUE'. Must be 'musl', 'glibc', or 'uclibc'."
                     exit 1
                 fi
                 LIBC_TYPE="$LIBC_VALUE"
                 SKIP_NEXT=true
             else
-                echo "Error: --libc requires a value (musl or glibc)"
+                echo "Error: --libc requires a value (musl, glibc, or uclibc)"
                 exit 1
             fi
             ;;
@@ -424,7 +425,7 @@ for i in $(seq 1 $#); do
             echo "  --clear-deps     Clear dependencies cache volume"
             echo "  --clear-tools    Clear toolchains, sources, and dependencies caches"
             echo "  --check-missing [ARCH]  Check for missing binaries (optionally filter by arch)"
-            echo "  --libc TYPE      For shared libs: musl or glibc"
+            echo "  --libc TYPE      Libc: musl, glibc, or uclibc (uclibc for xtensa)"
             echo ""
             echo "ARCHITECTURES:"
             echo "  ARM 32-bit: arm32v5le arm32v5lehf arm32v7le arm32v7lehf"
@@ -438,6 +439,7 @@ for i in $(seq 1 $#); do
             echo "  SuperH: sh2 sh2eb sh4 sh4eb"
             echo "  Others: microblaze microblazeel or1k m68k s390x"
             echo "  RISC-V: riscv32 riscv64"
+            echo "  Xtensa: xtensa (uclibc only)"
             echo ""
             echo "EXAMPLES:"
             echo "  $0                       # Build all tools & shared libs for all architectures"

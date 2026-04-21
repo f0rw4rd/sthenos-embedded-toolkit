@@ -14,10 +14,11 @@ source "$SCRIPT_DIR/lib/build_helpers.sh"
 
 MUSL_TOOLCHAIN_DIR="/build/toolchains"
 GLIBC_TOOLCHAIN_DIR="/build/toolchains-glibc"
+UCLIBC_TOOLCHAIN_DIR="/build/toolchains-uclibc"
 PARALLEL_JOBS=${TOOLCHAIN_PARALLEL_DOWNLOADS:-8}
 BASE_URL_BOOTLIN="https://toolchains.bootlin.com/downloads/releases/toolchains"
 
-mkdir -p "$MUSL_TOOLCHAIN_DIR" "$GLIBC_TOOLCHAIN_DIR"
+mkdir -p "$MUSL_TOOLCHAIN_DIR" "$GLIBC_TOOLCHAIN_DIR" "$UCLIBC_TOOLCHAIN_DIR"
 
 verify_toolchain() {
     local target_dir=$1
@@ -171,9 +172,82 @@ download_glibc_toolchain() {
     return 0
 }
 
+download_uclibc_toolchain() {
+    local arch="$1"
+
+    local url=$(get_custom_uclibc_url "$arch" 2>/dev/null)
+    local expected_sha512=$(get_custom_uclibc_sha512 "$arch" 2>/dev/null)
+    local uclibc_name=$(get_uclibc_toolchain "$arch" 2>/dev/null)
+    local subdir=$(get_toolchain_extract_subdir "$arch" 2>/dev/null)
+
+    if [ -z "$url" ] || [ -z "$uclibc_name" ]; then
+        log "Skipping $arch - no uclibc URL/name defined"
+        return 0
+    fi
+
+    local target_dir="$UCLIBC_TOOLCHAIN_DIR/$uclibc_name"
+
+    if [ -d "$target_dir" ] && [ -d "$target_dir/bin" ]; then
+        log "$arch uclibc toolchain already exists"
+        return 0
+    fi
+
+    log "Downloading $arch uclibc toolchain..."
+    log "  URL: $url"
+    log "  Target: $target_dir"
+
+    local temp_dir="/tmp/toolchain-${arch}-uclibc-$$-$(date +%s%N)"
+    mkdir -p "$temp_dir"
+    cd "$temp_dir"
+
+    trap "cleanup_build_dir '$temp_dir'" EXIT
+
+    local filename=$(basename "$url")
+    local max_retries=3
+
+    if ! download_with_progress "$arch" "$url" "$filename" "$expected_sha512" "$max_retries" "60"; then
+        cleanup_build_dir "$temp_dir"
+        return 1
+    fi
+
+    local file_size=$(ls -lh "$filename" | awk '{print $5}')
+    log "  Extracting $filename ($file_size)..."
+    if ! tar xf "$filename"; then
+        log_error "Failed to extract $arch uclibc toolchain"
+        return 1
+    fi
+
+    local source_dir
+    if [ -n "$subdir" ]; then
+        source_dir="$temp_dir/$subdir"
+        if [ ! -d "$source_dir" ]; then
+            log_error "Expected subdir '$subdir' not present in extracted $arch tarball"
+            return 1
+        fi
+    else
+        source_dir=$(find . -maxdepth 1 -type d ! -path . | head -1)
+        if [ -z "$source_dir" ]; then
+            log_error "No directory found after extraction for $arch uclibc"
+            return 1
+        fi
+    fi
+
+    mkdir -p "$(dirname "$target_dir")"
+    mv "$source_dir" "$target_dir"
+
+    if [ ! -d "$target_dir/bin" ]; then
+        log_error "Invalid uclibc toolchain structure for $arch - no bin directory"
+        return 1
+    fi
+
+    log "Successfully installed $arch uclibc toolchain"
+    return 0
+}
+
 export -f verify_toolchain
 export -f download_musl_toolchain
 export -f download_glibc_toolchain
+export -f download_uclibc_toolchain
 export -f log_error
 
 generate_musl_toolchains() {
@@ -376,6 +450,35 @@ done
 rm -rf "$GLIBC_JOB_DIR"
 
 echo
+echo "PHASE 3: Downloading uclibc toolchains"
+echo
+
+UCLIBC_ARCHS=()
+for arch in "${ALL_ARCHITECTURES[@]}"; do
+    if arch_supports_uclibc "$arch" && ! arch_supports_musl "$arch" && ! arch_supports_glibc "$arch"; then
+        UCLIBC_ARCHS+=("$arch")
+    fi
+done
+
+echo "Found ${#UCLIBC_ARCHS[@]} architectures with uclibc-only support"
+
+declare -A UCLIBC_RESULTS
+UCLIBC_TOTAL=0
+UCLIBC_SUCCESS=0
+UCLIBC_FAILED=0
+
+for arch in "${UCLIBC_ARCHS[@]}"; do
+    UCLIBC_TOTAL=$((UCLIBC_TOTAL + 1))
+    if download_uclibc_toolchain "$arch"; then
+        UCLIBC_RESULTS["$arch"]="OK"
+        UCLIBC_SUCCESS=$((UCLIBC_SUCCESS + 1))
+    else
+        UCLIBC_RESULTS["$arch"]="FAIL"
+        UCLIBC_FAILED=$((UCLIBC_FAILED + 1))
+    fi
+done
+
+echo
 echo "FINAL RESULTS"
 echo
 
@@ -395,14 +498,21 @@ for arch in "${GLIBC_ARCHS[@]}"; do
 done
 
 echo
+echo "Uclibc toolchains (${#UCLIBC_ARCHS[@]} total):"
+for arch in "${UCLIBC_ARCHS[@]}"; do
+    echo "${UCLIBC_RESULTS[$arch]} $arch"
+done
+
+echo
 echo "Summary:"
 echo "  Musl Total: $MUSL_TOTAL, Success: $MUSL_SUCCESS, Failed: $MUSL_FAILED"
 echo "  Glibc Total: $GLIBC_TOTAL, Success: $GLIBC_SUCCESS, Failed: $GLIBC_FAILED"
-echo "  Overall Total: $((MUSL_TOTAL + GLIBC_TOTAL))"
-echo "  Overall Success: $((MUSL_SUCCESS + GLIBC_SUCCESS))"
-echo "  Overall Failed: $((MUSL_FAILED + GLIBC_FAILED))"
+echo "  Uclibc Total: $UCLIBC_TOTAL, Success: $UCLIBC_SUCCESS, Failed: $UCLIBC_FAILED"
+echo "  Overall Total: $((MUSL_TOTAL + GLIBC_TOTAL + UCLIBC_TOTAL))"
+echo "  Overall Success: $((MUSL_SUCCESS + GLIBC_SUCCESS + UCLIBC_SUCCESS))"
+echo "  Overall Failed: $((MUSL_FAILED + GLIBC_FAILED + UCLIBC_FAILED))"
 
-TOTAL_FAILED=$((MUSL_FAILED + GLIBC_FAILED))
+TOTAL_FAILED=$((MUSL_FAILED + GLIBC_FAILED + UCLIBC_FAILED))
 if [ $TOTAL_FAILED -gt 0 ]; then
     echo
     log_error "$TOTAL_FAILED toolchain(s) failed to download"

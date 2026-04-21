@@ -91,20 +91,31 @@ get_glibc_toolchain_dir() {
     echo "/build/toolchains-glibc/${glibc_name}"
 }
 
+get_uclibc_toolchain_dir() {
+    local arch="$1"
+    local uclibc_name=$(get_uclibc_toolchain "$arch")
+    echo "/build/toolchains-uclibc/${uclibc_name}"
+}
+
 export -f get_arch_field
 export -f get_musl_toolchain
 export -f get_musl_cross
 export -f get_glibc_toolchain
+export -f get_uclibc_toolchain
 export -f get_bootlin_arch
 export -f get_bootlin_url
 export -f get_arch_cflags
 export -f get_config_arch
 export -f get_custom_musl_url
 export -f get_custom_glibc_url
+export -f get_custom_uclibc_url
+export -f get_custom_uclibc_sha512
+export -f get_toolchain_extract_subdir
 export -f is_valid_arch
 export -f get_all_architectures
 export -f arch_supports_musl
 export -f arch_supports_glibc
+export -f arch_supports_uclibc
 export -f is_glibc_only_arch
 export -f get_glibc_supported_archs
 export -f is_soft_float_arch
@@ -112,3 +123,4 @@ export -f is_zig_target
 export -f map_arch_name
 export -f get_musl_toolchain_dir
 export -f get_glibc_toolchain_dir
+export -f get_uclibc_toolchain_dir

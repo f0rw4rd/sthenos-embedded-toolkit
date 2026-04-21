@@ -17,8 +17,8 @@ if [ -z "${ALL_ARCHITECTURES+x}" ]; then
     
     m68k m68k_coldfire microblaze microblazeel or1k s390x
     sh2 sh2eb sh4 sh4eb loongarch64
-    
-    sparc64 nios2 arcle_hs38
+
+    sparc64 nios2 arcle_hs38 xtensa
 )
 fi
 
@@ -615,6 +615,16 @@ config_arch=arc
 bootlin_sha512=6cc9bf8d47355a4034a7a4d377b38cc12d8f023a46820490f116ace0babe7e9414576d85694988b869eb7622ab0fa302a3e82e3c1b7c45f71baab1757c115472
 "
 
+ARCH_CONFIG[xtensa]="
+uclibc_name=xtensa-dc232b-linux-uclibc
+uclibc_cross=xtensa-dc232b-linux-uclibc
+custom_uclibc_url=https://github.com/foss-xtensa/toolchain/releases/download/2020.07/x86_64-2020.07-xtensa-dc232b-linux-uclibc.tar.gz
+custom_uclibc_sha512=63575139b92021db6c49ef4325e2c1d52036975ea6a94f25850bc19bac9550495d546dbc9ecd2363752ce8bb385603b071d3ddb05e3e7719393322fe295b7584
+toolchain_extract_subdir=2020.07/xtensa-dc232b-linux-uclibc
+cflags=-mlongcalls
+config_arch=xtensa
+"
+
 ARCH_CONFIG[loongarch64]="
 musl_name=loongarch64-unknown-linux-musl
 musl_cross=loongarch64-unknown-linux-musl
@@ -655,13 +665,17 @@ get_custom_musl_url() { get_arch_field "$1" "custom_musl_url"; }
 get_custom_musl_sha512() { get_arch_field "$1" "custom_musl_sha512"; }
 get_custom_glibc_url() { get_arch_field "$1" "custom_glibc_url"; }
 get_custom_glibc_sha512() { get_arch_field "$1" "custom_glibc_sha512"; }
+get_uclibc_toolchain() { get_arch_field "$1" "uclibc_name"; }
+get_custom_uclibc_url() { get_arch_field "$1" "custom_uclibc_url"; }
+get_custom_uclibc_sha512() { get_arch_field "$1" "custom_uclibc_sha512"; }
+get_toolchain_extract_subdir() { get_arch_field "$1" "toolchain_extract_subdir"; }
 
 arch_supports_glibc() {
     local arch="$1"
     local glibc_name=$(get_arch_field "$arch" "glibc_name" 2>/dev/null)
     local bootlin_url=$(get_arch_field "$arch" "bootlin_url" 2>/dev/null)
     local custom_glibc=$(get_arch_field "$arch" "custom_glibc_url" 2>/dev/null)
-    
+
     [ -n "$glibc_name" ] || [ -n "$bootlin_url" ] || [ -n "$custom_glibc" ]
 }
 
@@ -669,8 +683,16 @@ arch_supports_musl() {
     local arch="$1"
     local musl_name=$(get_arch_field "$arch" "musl_name" 2>/dev/null)
     local custom_musl=$(get_arch_field "$arch" "custom_musl_url" 2>/dev/null)
-    
+
     [ -n "$musl_name" ] || [ -n "$custom_musl" ]
+}
+
+arch_supports_uclibc() {
+    local arch="$1"
+    local uclibc_name=$(get_arch_field "$arch" "uclibc_name" 2>/dev/null)
+    local custom_uclibc=$(get_arch_field "$arch" "custom_uclibc_url" 2>/dev/null)
+
+    [ -n "$uclibc_name" ] || [ -n "$custom_uclibc" ]
 }
 
 export ALL_ARCHITECTURES

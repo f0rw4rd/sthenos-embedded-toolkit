@@ -113,8 +113,11 @@ do_static_build() {
             if arch_supports_glibc "$arch"; then
                 log_tool "$arch" "No musl support, switching to glibc for $tool..."
                 libc="glibc"
+            elif arch_supports_uclibc "$arch"; then
+                log_tool "$arch" "No musl or glibc support, switching to uclibc for $tool..."
+                libc="uclibc"
             else
-                log_tool_warn "$arch" "Architecture $arch not supported by either musl or glibc"
+                log_tool_warn "$arch" "Architecture $arch not supported by musl, glibc, or uclibc"
                 return 1
             fi
         fi
@@ -147,28 +150,34 @@ do_static_build() {
         fi
         return $result
     else
+        # LIBC_TYPE flows into the child build script invoked by build_tool,
+        # which re-runs setup_arch — so uclibc archs need the env var set here.
+        if [ "$libc" = "uclibc" ]; then
+            export LIBC_TYPE="uclibc"
+        fi
+
         if ! setup_arch "$canonical_arch"; then
             log_error "Failed to setup architecture"
             return 1
         fi
-        
+
         if [ "$debug" = "1" ]; then
             log_tool "$canonical_arch" "DEBUG: CC=$CC, PATH=$PATH"
         fi
-        
+
         local log_file=""
         if [ "$log_enabled" = "true" ]; then
             log_file="${LOGS_DIR}/build-${tool}-${canonical_arch}-$(date +%Y%m%d-%H%M%S).log"
             log_display="${log_file#/build/}"
-            log_tool "$canonical_arch" "Building $tool with musl (log: $log_display)..."
-            
+            log_tool "$canonical_arch" "Building $tool with $libc (log: $log_display)..."
+
             if [ "$debug" = "1" ]; then
                 (set -x; build_tool "$tool" "$canonical_arch" "$mode") 2>&1 | tee "$log_file"
             else
                 (build_tool "$tool" "$canonical_arch" "$mode") > "$log_file" 2>&1
             fi
         else
-            log_tool "$canonical_arch" "Building $tool with musl..."
+            log_tool "$canonical_arch" "Building $tool with $libc..."
             build_tool "$tool" "$canonical_arch" "$mode"
         fi
         

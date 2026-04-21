@@ -231,6 +231,7 @@ WRAPPER_EOF
     local musl_name=$(get_musl_toolchain "$arch")
     local musl_cross=$(get_musl_cross "$arch")
     local glibc_name=$(get_glibc_toolchain "$arch")
+    local uclibc_name=$(get_uclibc_toolchain "$arch")
     local bootlin_arch=$(get_bootlin_arch "$arch")
     local cflags_arch=$(get_arch_cflags "$arch")
     local config_arch=$(get_config_arch "$arch")
@@ -238,15 +239,26 @@ WRAPPER_EOF
     local toolchain_dir
     local toolchain_type
 
-    # When LIBC_TYPE is explicitly glibc, skip musl even if available
-    if [ "${LIBC_TYPE:-}" != "glibc" ] && [ -n "$musl_name" ]; then
+    local forced_libc="${LIBC_TYPE:-}"
+
+    # Selection order:
+    #   LIBC_TYPE=glibc  → glibc only
+    #   LIBC_TYPE=uclibc → uclibc only
+    #   LIBC_TYPE=musl or unset → musl, then glibc, then uclibc
+    if [ "$forced_libc" = "uclibc" ] && [ -n "$uclibc_name" ]; then
+        toolchain_type="uclibc"
+        CROSS_COMPILE="${uclibc_name}-"
+        HOST="$uclibc_name"
+        toolchain_dir="/build/toolchains-uclibc/${uclibc_name}"
+
+    elif [ "$forced_libc" != "glibc" ] && [ "$forced_libc" != "uclibc" ] && [ -n "$musl_name" ]; then
         toolchain_type="musl"
         CROSS_COMPILE="${musl_name}-"
         HOST="$musl_name"
 
         toolchain_dir="/build/toolchains-musl/${musl_name}-cross"
 
-    elif [ -n "$glibc_name" ]; then
+    elif [ "$forced_libc" != "uclibc" ] && [ -n "$glibc_name" ]; then
         toolchain_type="glibc"
         CROSS_COMPILE="${glibc_name}-"
         HOST="$glibc_name"
@@ -266,8 +278,14 @@ WRAPPER_EOF
             return 1
         fi
 
+    elif [ -n "$uclibc_name" ]; then
+        toolchain_type="uclibc"
+        CROSS_COMPILE="${uclibc_name}-"
+        HOST="$uclibc_name"
+        toolchain_dir="/build/toolchains-uclibc/${uclibc_name}"
+
     else
-        log_error "No toolchain defined for architecture: $arch (neither musl nor glibc)"
+        log_error "No toolchain defined for architecture: $arch (neither musl, glibc, nor uclibc)"
         return 1
     fi
 

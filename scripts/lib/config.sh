@@ -7,6 +7,7 @@ export LOGS_DIR="$CONFIG_BASE_DIR/logs"
 
 export MUSL_TOOLCHAINS_DIR="$CONFIG_BASE_DIR/toolchains-musl"
 export GLIBC_TOOLCHAINS_DIR="$CONFIG_BASE_DIR/toolchains-glibc"
+export UCLIBC_TOOLCHAINS_DIR="$CONFIG_BASE_DIR/toolchains-uclibc"
 
 export STATIC_OUTPUT_DIR="$CONFIG_BASE_DIR/output"
 
@@ -30,7 +31,7 @@ get_glibc_toolchains_base_dir() {
 
 ensure_build_dirs() {
     mkdir -p "$SOURCES_DIR" "$LOGS_DIR"
-    mkdir -p "$MUSL_TOOLCHAINS_DIR" "$GLIBC_TOOLCHAINS_DIR"
+    mkdir -p "$MUSL_TOOLCHAINS_DIR" "$GLIBC_TOOLCHAINS_DIR" "$UCLIBC_TOOLCHAINS_DIR"
     mkdir -p "$STATIC_OUTPUT_DIR"
     mkdir -p "$MUSL_BUILD_DIR" "$GLIBC_BUILD_DIR"
 }

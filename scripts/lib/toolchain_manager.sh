@@ -8,6 +8,7 @@ source /build/scripts/lib/build_helpers.sh
 
 MUSL_TOOLCHAIN_DIR="$MUSL_TOOLCHAINS_DIR"
 GLIBC_TOOLCHAIN_DIR="$GLIBC_TOOLCHAINS_DIR"
+UCLIBC_TOOLCHAIN_DIR="$UCLIBC_TOOLCHAINS_DIR"
 BASE_URL_BOOTLIN="$BOOTLIN_BASE_URL"
 
 ensure_build_dirs
@@ -192,17 +193,93 @@ download_glibc_toolchain_single() {
     return 0
 }
 
+uclibc_toolchain_exists() {
+    local arch="$1"
+    local uclibc_name=$(get_uclibc_toolchain "$arch" 2>/dev/null)
+
+    if [ -z "$uclibc_name" ]; then
+        return 1
+    fi
+
+    local toolchain_dir="$UCLIBC_TOOLCHAIN_DIR/$uclibc_name"
+
+    if [ -d "$toolchain_dir/bin" ] && [ -n "$(ls "$toolchain_dir/bin/"*-gcc 2>/dev/null)" ]; then
+        return 0
+    fi
+
+    return 1
+}
+
+download_uclibc_toolchain_single() {
+    local arch="$1"
+
+    local url=$(get_custom_uclibc_url "$arch" 2>/dev/null)
+    local expected_sha512=$(get_custom_uclibc_sha512 "$arch" 2>/dev/null)
+    local uclibc_name=$(get_uclibc_toolchain "$arch" 2>/dev/null)
+    local subdir=$(get_toolchain_extract_subdir "$arch" 2>/dev/null)
+
+    if [ -z "$url" ] || [ -z "$uclibc_name" ]; then
+        log_error "No uclibc URL/name defined for architecture: $arch"
+        return 1
+    fi
+
+    local target_dir="$UCLIBC_TOOLCHAIN_DIR/$uclibc_name"
+
+    log "Downloading uclibc toolchain for $arch..."
+    log "  URL: $url"
+    log "  Target: $target_dir"
+
+    local temp_dir="/tmp/uclibc-download-${arch}-$$"
+    mkdir -p "$temp_dir"
+    cd "$temp_dir"
+
+    trap "cleanup_build_dir '$temp_dir'" EXIT
+
+    if ! download_and_extract "$url" "$temp_dir" 0 "$expected_sha512"; then
+        log_error "Failed to download and extract uclibc toolchain for $arch"
+        cleanup_build_dir "$temp_dir"
+        return 1
+    fi
+
+    local source_dir
+    if [ -n "$subdir" ]; then
+        source_dir="$temp_dir/$subdir"
+        if [ ! -d "$source_dir" ]; then
+            log_error "Expected subdir '$subdir' not present in extracted $arch tarball"
+            return 1
+        fi
+    else
+        source_dir=$(find "$temp_dir" -maxdepth 1 -type d ! -path "$temp_dir" | head -1)
+        if [ -z "$source_dir" ]; then
+            log_error "No directory found after extraction for $arch uclibc"
+            return 1
+        fi
+    fi
+
+    mkdir -p "$(dirname "$target_dir")"
+    mv "$source_dir" "$target_dir"
+
+    if [ ! -d "$target_dir/bin" ] || [ -z "$(ls "$target_dir/bin/"*-gcc 2>/dev/null)" ]; then
+        log_error "Invalid uclibc toolchain structure for $arch"
+        rm -rf "$target_dir"
+        return 1
+    fi
+
+    log "✓ Successfully downloaded uclibc toolchain for $arch"
+    return 0
+}
+
 ensure_toolchain() {
     local arch="$1"
-    
+
     # Skip toolchain check for Zig targets
     if [[ "$arch" == *"_"* ]] && [[ "$arch" != "x86_64" ]] && [[ "$arch" != "x86_64_x32" ]] && [[ "$arch" != "aarch64_be" ]] && [[ "$arch" != "m68k_coldfire" ]] && [[ "$arch" != "arcle_hs38" ]]; then
         log "Zig target detected ($arch), skipping traditional toolchain check"
         return 0
     fi
-    
+
     log "Checking toolchain availability for architecture: $arch"
-    
+
     if arch_supports_musl "$arch"; then
         if ! musl_toolchain_exists "$arch"; then
             log "Musl toolchain not found for $arch, downloading..."
@@ -214,7 +291,7 @@ ensure_toolchain() {
             log "✓ Musl toolchain already available for $arch"
         fi
     fi
-    
+
     if arch_supports_glibc "$arch"; then
         if ! glibc_toolchain_exists "$arch"; then
             log "Glibc toolchain not found for $arch, downloading..."
@@ -226,12 +303,24 @@ ensure_toolchain() {
             log "✓ Glibc toolchain already available for $arch"
         fi
     fi
-    
-    if ! arch_supports_musl "$arch" && ! arch_supports_glibc "$arch"; then
-        log_error "Architecture $arch is not supported (no musl or glibc toolchain available)"
+
+    if arch_supports_uclibc "$arch" && ! arch_supports_musl "$arch" && ! arch_supports_glibc "$arch"; then
+        if ! uclibc_toolchain_exists "$arch"; then
+            log "Uclibc toolchain not found for $arch, downloading..."
+            if ! download_uclibc_toolchain_single "$arch"; then
+                log_error "Failed to download uclibc toolchain for $arch"
+                return 1
+            fi
+        else
+            log "✓ Uclibc toolchain already available for $arch"
+        fi
+    fi
+
+    if ! arch_supports_musl "$arch" && ! arch_supports_glibc "$arch" && ! arch_supports_uclibc "$arch"; then
+        log_error "Architecture $arch is not supported (no musl, glibc, or uclibc toolchain available)"
         return 1
     fi
-    
+
     return 0
 }
 
