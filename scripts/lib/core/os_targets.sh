@@ -19,16 +19,17 @@ readonly PRIMARY_OS_TARGETS=(
 # Secondary OS targets - supported but less commonly used
 # Note: FreeBSD doesn't support static linking with Zig
 readonly SECONDARY_OS_TARGETS=(
-    "dragonfly"  # BSD variant with unique features
-    "illumos"    # OpenSolaris derivative (SmartOS, OmniOS)
-    "solaris"    # Enterprise Unix
-    "aix"        # IBM enterprise Unix
-    "haiku"      # BeOS successor, niche but active
-    "wasi"       # WebAssembly System Interface
-    "ios"        # Apple iOS
-    "tvos"       # Apple tvOS
-    "watchos"    # Apple watchOS
-    "visionos"   # Apple visionOS
+    "dragonfly"    # BSD variant with unique features
+    "illumos"      # OpenSolaris derivative (SmartOS, OmniOS)
+    "solaris"      # Enterprise Unix
+    "aix"          # IBM enterprise Unix
+    "haiku"        # BeOS successor, niche but active
+    "wasi"         # WebAssembly System Interface
+    "ios"          # Apple iOS
+    "tvos"         # Apple tvOS
+    "watchos"      # Apple watchOS
+    "visionos"     # Apple visionOS
+    "maccatalyst"  # Mac Catalyst (iOS apps on macOS)
 )
 
 # All supported OS targets
@@ -46,6 +47,7 @@ OS_FAMILY[ios]="darwin"
 OS_FAMILY[tvos]="darwin"
 OS_FAMILY[watchos]="darwin"
 OS_FAMILY[visionos]="darwin"
+OS_FAMILY[maccatalyst]="darwin"
 OS_FAMILY[windows]="windows"
 OS_FAMILY[illumos]="unix"
 OS_FAMILY[solaris]="unix"
@@ -166,7 +168,7 @@ get_default_abi() {
         openbsd|netbsd|dragonfly)
             echo ""  # BSDs use their native libc
             ;;
-        macos|ios|tvos|watchos|visionos)
+        macos|ios|tvos|watchos|visionos|maccatalyst)
             echo "none"  # Darwin doesn't use GNU/musl
             ;;
         android)
@@ -222,21 +224,26 @@ zig_has_libc() {
     case "$triple" in
         aarch64-freebsd-none|aarch64-freebsd) return 0 ;;
         aarch64-linux-gnu|aarch64-linux-musl) return 0 ;;
+        aarch64-maccatalyst-none|aarch64-maccatalyst) return 0 ;;
         aarch64-macos-none|aarch64-macos) return 0 ;;
         aarch64-netbsd-none|aarch64-netbsd) return 0 ;;
         aarch64-openbsd-none|aarch64-openbsd) return 0 ;;
         aarch64-windows-gnu) return 0 ;;
         aarch64_be-linux-gnu|aarch64_be-linux-musl) return 0 ;;
         aarch64_be-netbsd-none) return 0 ;;
+        arc-linux-gnu) return 0 ;;
         arm-freebsd-eabihf) return 0 ;;
         arm-linux-gnueabi|arm-linux-gnueabihf) return 0 ;;
         arm-linux-musleabi|arm-linux-musleabihf) return 0 ;;
         arm-netbsd-eabi|arm-netbsd-eabihf) return 0 ;;
+        arm-openbsd-eabi) return 0 ;;
         armeb-linux-gnueabi|armeb-linux-gnueabihf) return 0 ;;
         armeb-linux-musleabi|armeb-linux-musleabihf) return 0 ;;
         armeb-netbsd-eabi|armeb-netbsd-eabihf) return 0 ;;
+        csky-linux-gnueabi|csky-linux-gnueabihf) return 0 ;;
+        hexagon-linux-musl) return 0 ;;
         loongarch64-linux-gnu|loongarch64-linux-gnusf) return 0 ;;
-        loongarch64-linux-musl|loongarch64-linux-muslsf) return 0 ;;
+        loongarch64-linux-musl|loongarch64-linux-muslf32|loongarch64-linux-muslsf) return 0 ;;
         m68k-linux-gnu|m68k-linux-musl) return 0 ;;
         m68k-netbsd-none) return 0 ;;
         mips-linux-gnueabi|mips-linux-gnueabihf) return 0 ;;
@@ -247,24 +254,30 @@ zig_has_libc() {
         mipsel-netbsd-eabi|mipsel-netbsd-eabihf) return 0 ;;
         mips64-linux-gnuabi64|mips64-linux-gnuabin32) return 0 ;;
         mips64-linux-muslabi64|mips64-linux-muslabin32) return 0 ;;
+        mips64-openbsd-none|mips64-openbsd) return 0 ;;
         mips64el-linux-gnuabi64|mips64el-linux-gnuabin32) return 0 ;;
         mips64el-linux-muslabi64|mips64el-linux-muslabin32) return 0 ;;
+        mips64el-openbsd-none|mips64el-openbsd) return 0 ;;
         powerpc-freebsd-eabihf) return 0 ;;
         powerpc-linux-gnueabi|powerpc-linux-gnueabihf) return 0 ;;
         powerpc-linux-musleabi|powerpc-linux-musleabihf) return 0 ;;
         powerpc-netbsd-eabi|powerpc-netbsd-eabihf) return 0 ;;
+        powerpc-openbsd-eabihf|powerpc-openbsd) return 0 ;;
         powerpc64-freebsd-none) return 0 ;;
         powerpc64-linux-gnu|powerpc64-linux-musl) return 0 ;;
+        powerpc64-openbsd-none|powerpc64-openbsd) return 0 ;;
         powerpc64le-freebsd-none) return 0 ;;
         powerpc64le-linux-gnu|powerpc64le-linux-musl) return 0 ;;
         riscv32-linux-gnu|riscv32-linux-musl) return 0 ;;
         riscv64-freebsd-none) return 0 ;;
         riscv64-linux-gnu|riscv64-linux-musl) return 0 ;;
+        riscv64-openbsd-none|riscv64-openbsd) return 0 ;;
         s390x-linux-gnu|s390x-linux-musl) return 0 ;;
         sparc-linux-gnu) return 0 ;;
         sparc-netbsd-none) return 0 ;;
         sparc64-linux-gnu) return 0 ;;
         sparc64-netbsd-none) return 0 ;;
+        sparc64-openbsd-none|sparc64-openbsd) return 0 ;;
         thumb-linux-musleabi|thumb-linux-musleabihf) return 0 ;;
         thumb-windows-gnu) return 0 ;;
         thumbeb-linux-musleabi|thumbeb-linux-musleabihf) return 0 ;;
@@ -272,10 +285,12 @@ zig_has_libc() {
         x86-freebsd-none) return 0 ;;
         x86-linux-gnu|x86-linux-musl) return 0 ;;
         x86-netbsd-none) return 0 ;;
+        x86-openbsd-none|x86-openbsd) return 0 ;;
         x86-windows-gnu) return 0 ;;
         x86_64-freebsd-none|x86_64-freebsd) return 0 ;;
         x86_64-linux-gnu|x86_64-linux-gnux32) return 0 ;;
         x86_64-linux-musl|x86_64-linux-muslx32) return 0 ;;
+        x86_64-maccatalyst-none|x86_64-maccatalyst) return 0 ;;
         x86_64-macos-none|x86_64-macos) return 0 ;;
         x86_64-netbsd-none|x86_64-netbsd) return 0 ;;
         x86_64-openbsd-none|x86_64-openbsd) return 0 ;;

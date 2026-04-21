@@ -107,6 +107,13 @@ setup_arch() {
 
         local zig_triple="${arch_part}-${os_abi}"
 
+        # ARM on BSDs requires an explicit -eabi ABI suffix in Zig (e.g.
+        # arm-openbsd-eabi, arm-netbsd-eabi). get_default_abi returns empty
+        # for BSDs, so patch it here when the bare triple would be rejected.
+        if ! zig_has_libc "$zig_triple" && zig_has_libc "${zig_triple}-eabi"; then
+            zig_triple="${zig_triple}-eabi"
+        fi
+
         # Validate that Zig has libc support for this target
         if ! zig_has_libc "$zig_triple"; then
             log_error "Zig 0.16.0 does not have libc support for target '$zig_triple' (arch: $arch)"
@@ -408,11 +415,15 @@ check_tool_support() {
             # Assume last part is OS unless it looks like an ABI
             target_os="${parts[-1]}"
 
-            # Common ABIs: gnu, musl, msvc, none
-            if [[ "$target_os" == "gnu" ]] || [[ "$target_os" == "musl" ]] || [[ "$target_os" == "msvc" ]] || [[ "$target_os" == "none" ]]; then
-                # Last part is ABI, so OS is second-to-last
-                target_os="${parts[-2]}"
-            fi
+            # Known ABI suffixes — when present, OS is second-to-last.
+            case "$target_os" in
+                gnu|musl|msvc|none|android|androideabi|\
+                gnueabi|gnueabihf|gnusf|gnux32|gnuabi64|gnuabin32|\
+                musleabi|musleabihf|muslsf|muslx32|muslabi64|muslabin32|muslf32|\
+                eabi|eabihf)
+                    target_os="${parts[-2]}"
+                    ;;
+            esac
         fi
     fi
 

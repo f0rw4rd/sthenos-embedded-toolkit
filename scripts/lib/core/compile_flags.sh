@@ -42,7 +42,10 @@ get_compile_flags() {
             # with legacy assembly (OpenSSL cast-586.o, aesni-x86.o, etc).
             # Windows/Wasm Zig targets require PIC, so skip -fno-pie there.
             if platform_supports_static; then
-                if [ "${USE_ZIG:-0}" = "1" ] && { [[ "${ZIG_TARGET:-}" == *"windows"* ]] || [[ "${ZIG_TARGET:-}" == *"wasi"* ]]; }; then
+                # Windows/Wasm Zig targets require PIC. ARC, CSKY, and Hexagon
+                # Zig targets also mandate PIC (LLVM errors: "the selected
+                # target requires position independent code").
+                if [ "${USE_ZIG:-0}" = "1" ] && { [[ "${ZIG_TARGET:-}" == *"windows"* ]] || [[ "${ZIG_TARGET:-}" == *"wasi"* ]] || [[ "${ZIG_TARGET:-}" == arc_* ]] || [[ "${ZIG_TARGET:-}" == csky_* ]] || [[ "${ZIG_TARGET:-}" == hexagon_* ]]; }; then
                     base_flags="-static $base_flags"
                 else
                     base_flags="-static -fno-pie -fno-pic $base_flags"
@@ -113,7 +116,13 @@ get_link_flags() {
             
             case "$arch" in
                 mips*)
-                    link_flags="$link_flags -Wl,--no-export-dynamic"
+                    # GNU ld on MIPS needs --no-export-dynamic to keep the symbol
+                    # table from bloating statically-linked binaries. Zig's lld
+                    # rejects this flag on mips*-openbsd specifically, so skip
+                    # it when cross-compiling MIPS via Zig.
+                    if [ "${USE_ZIG:-0}" != "1" ]; then
+                        link_flags="$link_flags -Wl,--no-export-dynamic"
+                    fi
                     ;;
                 sh2|sh2eb)
                     # sh2/sh2eb musl.cc toolchains are built with --enable-default-pie

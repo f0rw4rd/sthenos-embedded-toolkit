@@ -512,9 +512,17 @@ if [ "$CHECK_MISSING" != true ] && [ -n "$ARCHITECTURES" ] && [ "$ARCHITECTURES"
             fi
         fi
         
-        # Convert architecture to Zig target format
-        # Don't append if it already looks like a Zig target (has OS suffix)
-        if [[ "$ARCHITECTURES" != *"_linux"* ]] && [[ "$ARCHITECTURES" != *"_windows"* ]] && [[ "$ARCHITECTURES" != *"_macos"* ]] && [[ "$ARCHITECTURES" != *"_freebsd"* ]]; then
+        # Convert architecture to Zig target format.
+        # Skip the append if the arch already ends with _<os> for any supported OS —
+        # otherwise `--arch riscv64_openbsd --os openbsd` produces riscv64_openbsd_openbsd.
+        already_suffixed=false
+        for _os in "${ALL_OS_TARGETS[@]}"; do
+            if [[ "$ARCHITECTURES" == *"_${_os}" ]]; then
+                already_suffixed=true
+                break
+            fi
+        done
+        if [ "$already_suffixed" = false ]; then
             ARCHITECTURES="${ARCHITECTURES}_${TARGET_OS}"
             if [ "$DEBUG" = "1" ]; then
                 echo "DEBUG: Converted architecture to Zig target: $ARCHITECTURES" >&2
