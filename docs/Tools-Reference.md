@@ -107,6 +107,29 @@ All tools are statically linked with musl libc and have zero runtime dependencie
 
 **Use cases**: Tunneling, network pivoting, bypassing network restrictions
 
+#### oida-fuzzing-agent
+**On-target fuzzing supervisor** - A small, dependency-free (libc/winsock only) C agent that starts a target process and reports its state - up, crashed, exited, or hung - to a fuzzer over a tiny token-authenticated TCP protocol. It can also stop and restart the target so long fuzzing runs keep going.
+
+```bash
+./build oida-fuzzing-agent --arch arm32v7le
+
+# Start a target, require a token, listen on a port
+./output/arm32v7le/oida-fuzzing-agent --port 5555 --token s3cret -- /opt/plc/runtime --config a.xml
+
+# Print version (oida-fuzzing-agent <ver> (protocol 1))
+./output/arm32v7le/oida-fuzzing-agent --version
+```
+
+The [OIDA](https://github.com/f0rw4rd/oida-fuzzing-agent) fuzzer drives it remotely:
+
+```bash
+oida fuzz <proto> <ip> --agent-monitor <agent-host>:<port> --agent-token <secret>
+```
+
+**Use cases**: Crash/hang detection during network fuzzing of embedded targets, tying a crash to the test case that caused it, auto-restarting a crashed target
+
+**Upstream**: https://github.com/f0rw4rd/oida-fuzzing-agent
+
 ### System Tools
 
 #### busybox / busybox_nodrop

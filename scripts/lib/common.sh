@@ -44,6 +44,7 @@ declare -A TOOL_SCRIPTS=(
     ["curl"]="$SCRIPT_DIR/../static/tools/build-curl.sh"
     ["curl-full"]="$SCRIPT_DIR/../static/tools/build-curl-full.sh"
     ["microsocks"]="$SCRIPT_DIR/../static/tools/build-microsocks.sh"
+    ["oida-fuzzing-agent"]="$SCRIPT_DIR/../static/tools/build-oida-fuzzing-agent.sh"
     ["tinyproxy"]="$SCRIPT_DIR/../static/tools/build-tinyproxy.sh"
     ["i2c-tools"]="$SCRIPT_DIR/../static/tools/build-i2c-tools.sh"
     ["spidev-tools"]="$SCRIPT_DIR/../static/tools/build-spidev-tools.sh"

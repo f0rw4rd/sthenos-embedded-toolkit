@@ -400,6 +400,7 @@ for i in $(seq 1 $#); do
             echo "  curl        HTTP/HTTPS client (minimal build)"
             echo "  curl-full   HTTP/HTTPS client with all protocols (FTP, LDAP, etc.)"
             echo "  microsocks  Lightweight SOCKS5 proxy server"
+            echo "  oida-fuzzing-agent  On-target process supervisor for network fuzzing"
             echo "  shell       Shell utilities as static executables (output/<arch>/shell/)"
             echo "  custom      Custom tool template (musl, modify scripts/tools/build-custom.sh)"            
             echo ""

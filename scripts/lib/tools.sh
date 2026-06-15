@@ -15,8 +15,6 @@ build_tool() {
     local tool=$1
     local arch=$2
 
-    echo "test: $TOOL_SCRIPTS"
-    
     if [ -z "${TOOL_SCRIPTS[$tool]}" ]; then
         echo "Unknown tool: $tool"
         return 1
