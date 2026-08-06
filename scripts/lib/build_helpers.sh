@@ -322,6 +322,38 @@ verify_static_binary() {
 }
 
 
+# Endianness of a target arch, used to seed autoconf cross caches
+# (ac_cv_c_bigendian). Return 0 (true) for big-endian targets. Big-endian is
+# determined by the toolchain triple / ISA, not always visible in cflags
+# (e.g. mips64 and mips64n32 carry no -EB but are big-endian), so the set is
+# enumerated explicitly. Keep in sync with scripts/lib/core/architectures.sh.
+is_big_endian_arch() {
+    case "$1" in
+        aarch64_be|armeb|armebhf|armebv7hf|\
+        mips32be|mips32besf|mips64|mips64n32|\
+        ppc32be|ppc32besf|ppc64be|\
+        sh2eb|sh4eb|\
+        m68k|m68k_coldfire|s390x|microblaze|or1k|sparc64)
+            return 0 ;;
+        *)
+            return 1 ;;
+    esac
+}
+
+# Pointer/long size in bytes for a target arch, used to seed autoconf cross
+# caches (ac_cv_sizeof_long/void_p/size_t/time_t). Note the two ABIs that put
+# 32-bit pointers on a 64-bit CPU: x86-64 x32 and MIPS n32.
+get_pointer_size() {
+    case "$1" in
+        x86_64_x32|mips64n32|mips64n32el)
+            echo 4 ;;
+        x86_64|aarch64|aarch64_be|mips64|mips64le|ppc64be|ppc64le|riscv64|s390x|sparc64|loongarch64)
+            echo 8 ;;
+        *)
+            echo 4 ;;
+    esac
+}
+
 create_cross_cache() {
     local arch=$1
     local cache_file=$2
@@ -482,6 +514,8 @@ export -f create_build_dir
 export -f cleanup_build_dir
 export -f install_binary
 export -f verify_static_binary
+export -f is_big_endian_arch
+export -f get_pointer_size
 export -f create_cross_cache
 export -f generate_socat_cross_cache
 export -f get_binary_size

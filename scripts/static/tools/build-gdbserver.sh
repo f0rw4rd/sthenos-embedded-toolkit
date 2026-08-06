@@ -116,7 +116,7 @@ PATCH
     mkdir -p "$(dirname "$output_path")"
     cp gdbserver/gdbserver "$output_path"
     
-    local size=$(ls -lh "/build/output/$arch/gdbserver" | awk '{print $5}')
+    local size=$(get_binary_size "$output_path")
     log_tool "gdbserver" "Built successfully for $arch ($size)"
     
     cleanup_build_dir "$build_dir"

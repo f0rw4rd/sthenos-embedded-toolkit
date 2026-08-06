@@ -20,7 +20,7 @@ build_i2c_tools() {
 
     if ! check_tool_support "$SUPPORTED_OS" "$TOOL_NAME"; then return 1; fi
 
-    if [ -d "$i2c_dir" ] && [ "$(ls -A "$i2c_dir" 2>/dev/null)" ]; then
+    if [ "${SKIP_IF_EXISTS:-true}" = "true" ] && [ -d "$i2c_dir" ] && [ "$(ls -A "$i2c_dir" 2>/dev/null)" ]; then
         local tool_count=$(ls -1 "$i2c_dir" | wc -l)
         log_tool "i2c-tools" "Already built for $arch ($tool_count tools in ${i2c_dir##*/})"
         return 0

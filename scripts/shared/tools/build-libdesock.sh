@@ -120,8 +120,8 @@ main() {
         i486|ix86le)               interpreter="/lib/ld-linux.so.2" ;;
         aarch64)                   interpreter="/lib/ld-linux-aarch64.so.1" ;;
         aarch64_be)                interpreter="/lib/ld-linux-aarch64_be.so.1" ;;
-        arm*|armel*|armv*)         interpreter="/lib/ld-linux-armhf.so.3" ;;
         armeb*)                    interpreter="/lib/ld-linux.so.3" ;;
+        arm*|armel*|armv*)         interpreter="/lib/ld-linux-armhf.so.3" ;;
         mips64n32|mips64n32el)     interpreter="/lib32/ld.so.1" ;;
         mips64*)                   interpreter="/lib64/ld.so.1" ;;
         mips*)                     interpreter="/lib/ld.so.1" ;;

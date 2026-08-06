@@ -21,7 +21,7 @@ build_mtd_utils() {
 
     if ! check_tool_support "$SUPPORTED_OS" "$TOOL_NAME"; then return 1; fi
 
-    if [ -d "$mtd_dir" ] && [ "$(ls -A "$mtd_dir" 2>/dev/null)" ]; then
+    if [ "${SKIP_IF_EXISTS:-true}" = "true" ] && [ -d "$mtd_dir" ] && [ "$(ls -A "$mtd_dir" 2>/dev/null)" ]; then
         local tool_count=$(ls -1 "$mtd_dir" | wc -l)
         log_tool "mtd-utils" "Already built for $arch ($tool_count tools in ${mtd_dir##*/})"
         return 0

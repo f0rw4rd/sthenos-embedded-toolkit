@@ -33,12 +33,12 @@ musl_toolchain_exists() {
 glibc_toolchain_exists() {
     local arch="$1"
     local glibc_name=$(get_glibc_toolchain "$arch" 2>/dev/null)
-    
+
     if [ -z "$glibc_name" ]; then
         return 1
     fi
-    
-    local toolchain_dir="$GLIBC_TOOLCHAIN_DIR/$glibc_name"
+
+    local toolchain_dir="$GLIBC_TOOLCHAIN_DIR/$(get_glibc_dir "$arch")"
     
     if [ -d "$toolchain_dir/bin" ] && [ -n "$(ls "$toolchain_dir/bin/"*-gcc 2>/dev/null)" ]; then
         return 0
@@ -155,8 +155,8 @@ download_glibc_toolchain_single() {
         log_error "No glibc toolchain name for $arch"
         return 1
     fi
-    
-    local target_dir="$GLIBC_TOOLCHAIN_DIR/$glibc_name"
+
+    local target_dir="$GLIBC_TOOLCHAIN_DIR/$(get_glibc_dir "$arch")"
     
     log "Downloading glibc toolchain for $arch..."
     log "  URL: $url"

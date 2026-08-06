@@ -56,7 +56,7 @@ build_nmap() {
     update_config_scripts
 
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
-    local cxxflags=$(get_cxx_flags "$arch" "$TOOL_NAME")
+    local cxxflags=$(get_cxx_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")
     
     cflags="$cflags -I$pcap_dir/include -I$ssl_dir/include -I$zlib_dir/include"
@@ -110,7 +110,7 @@ build_nmap() {
         local output_path=$(get_output_path "$arch" "nmap")
     mkdir -p "$(dirname "$output_path")"
     cp nmap "$output_path"
-        local size=$(ls -lh "/build/output/$arch/nmap" | awk '{print $5}')
+        local size=$(get_binary_size "$output_path")
         log_tool "nmap" "Built successfully for $arch ($size)"
         cleanup_build_dir "$build_dir"
         return 0

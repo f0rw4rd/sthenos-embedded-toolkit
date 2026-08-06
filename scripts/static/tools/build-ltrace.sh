@@ -134,8 +134,9 @@ build_ltrace() {
         build_argp_standalone_cached "$arch" >/dev/null || return 1
     fi
     
-    local elfutils_dir=$(build_libelf_cached "$arch") || return 1
-    local zlib_dir=$(build_zlib_cached "$arch") || return 1
+    local elfutils_dir zlib_dir
+    elfutils_dir=$(build_libelf_cached "$arch") || return 1
+    zlib_dir=$(build_zlib_cached "$arch") || return 1
     
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")
     local ldflags=$(get_link_flags "$arch" "static")

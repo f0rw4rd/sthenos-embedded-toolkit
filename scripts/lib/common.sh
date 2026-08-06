@@ -108,11 +108,20 @@ setup_arch() {
 
         local zig_triple="${arch_part}-${os_abi}"
 
-        # ARM on BSDs requires an explicit -eabi ABI suffix in Zig (e.g.
-        # arm-openbsd-eabi, arm-netbsd-eabi). get_default_abi returns empty
-        # for BSDs, so patch it here when the bare triple would be rejected.
-        if ! zig_has_libc "$zig_triple" && zig_has_libc "${zig_triple}-eabi"; then
-            zig_triple="${zig_triple}-eabi"
+        # Some BSD triples need an explicit ABI suffix in Zig: ARM wants
+        # -eabi/-eabihf (arm-openbsd-eabi, arm-freebsd-eabihf) and most
+        # FreeBSD arches want -none (riscv64-freebsd-none). get_default_abi
+        # returns empty for BSDs, so probe here when the bare triple is
+        # rejected. Order matters: -none before -eabi keeps arm-netbsd and
+        # arm-openbsd on -eabi, which is what they resolved to before.
+        if ! zig_has_libc "$zig_triple"; then
+            local _abi
+            for _abi in none eabi eabihf; do
+                if zig_has_libc "${zig_triple}-${_abi}"; then
+                    zig_triple="${zig_triple}-${_abi}"
+                    break
+                fi
+            done
         fi
 
         # Validate that Zig has libc support for this target
@@ -271,10 +280,13 @@ WRAPPER_EOF
         CROSS_COMPILE="${glibc_name}-"
         HOST="$glibc_name"
 
-        # Try glibc toolchain name as directory first (extracted Bootlin toolchains),
-        # then fall back to Bootlin archive pattern for backward compatibility
-        if [ -d "/build/toolchains-glibc/${glibc_name}" ]; then
-            toolchain_dir="/build/toolchains-glibc/${glibc_name}"
+        # Try glibc toolchain dir first (extracted Bootlin toolchains). Use
+        # get_glibc_dir, not glibc_name: arches that share a compiler prefix but
+        # ship incompatible CPU toolchains (armv6 vs armv7, m68k vs coldfire) get
+        # distinct dirs so they don't clobber each other.
+        local glibc_dir=$(get_glibc_dir "$arch")
+        if [ -d "/build/toolchains-glibc/${glibc_dir}" ]; then
+            toolchain_dir="/build/toolchains-glibc/${glibc_dir}"
         elif [ -n "$bootlin_arch" ]; then
             toolchain_dir=$(find /build/toolchains-glibc -maxdepth 1 -type d -name "${bootlin_arch}--glibc--stable-*" 2>/dev/null | head -1)
             if [ -z "$toolchain_dir" ]; then
@@ -377,13 +389,22 @@ download_and_extract() {
 
     case "$filename" in
         *.tar.gz|*.tgz)
-            tar xzf "$source_file" -C "$dest_dir" --strip-components=$strip_components
+            tar xzf "$source_file" -C "$dest_dir" --strip-components=$strip_components || {
+                log_error "Extraction failed for $filename"
+                return 1
+            }
             ;;
         *.tar.bz2)
-            tar xjf "$source_file" -C "$dest_dir" --strip-components=$strip_components
+            tar xjf "$source_file" -C "$dest_dir" --strip-components=$strip_components || {
+                log_error "Extraction failed for $filename"
+                return 1
+            }
             ;;
         *.tar.xz)
-            tar xJf "$source_file" -C "$dest_dir" --strip-components=$strip_components
+            tar xJf "$source_file" -C "$dest_dir" --strip-components=$strip_components || {
+                log_error "Extraction failed for $filename"
+                return 1
+            }
             ;;
         *)
             log_error "Unknown archive format: $filename"

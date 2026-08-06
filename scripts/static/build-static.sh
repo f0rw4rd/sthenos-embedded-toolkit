@@ -144,6 +144,9 @@ do_static_build() {
         if [ $result -eq 0 ]; then
             log_tool "$canonical_arch" "SUCCESS: $tool built successfully"
             [ -n "$log_file" ] && rm -f "$log_file"
+        elif [ $result -eq 2 ]; then
+            log_tool "$canonical_arch" "SKIP: $tool not supported on $canonical_arch"
+            [ -n "$log_file" ] && rm -f "$log_file"
         else
             log_tool "$canonical_arch" "ERROR: $tool build failed"
             [ -n "$log_file" ] && log_tool "$canonical_arch" "Check log: ${log_file#/build/}"
@@ -184,6 +187,9 @@ do_static_build() {
         local result=$?
         if [ $result -eq 0 ]; then
             log_tool "$canonical_arch" "SUCCESS: $tool built successfully"
+            [ -n "$log_file" ] && rm -f "$log_file"
+        elif [ $result -eq 2 ]; then
+            log_tool "$canonical_arch" "SKIP: $tool not supported on $canonical_arch"
             [ -n "$log_file" ] && rm -f "$log_file"
         else
             log_tool "$canonical_arch" "ERROR: $tool build failed"
@@ -316,12 +322,19 @@ run_static_builds() {
     local TOTAL_BUILDS=$((${#TOOLS_TO_BUILD[@]} * ${#ARCHS_TO_BUILD[@]}))
     local COMPLETED=0
     local FAILED=0
+    local SKIPPED=0
     local START_TIME=$(date +%s)
-    
+
     for tool in "${TOOLS_TO_BUILD[@]}"; do
         for arch in "${ARCHS_TO_BUILD[@]}"; do
-            if do_static_build "$tool" "$arch" "$libc" "$mode" "$log_enabled" "$debug"; then
+            local build_rc=0
+            do_static_build "$tool" "$arch" "$libc" "$mode" "$log_enabled" "$debug" || build_rc=$?
+            # A tool returns 2 to signal "not supported on this arch" (e.g.
+            # gdbserver on or1k); that is a skip, not a build failure.
+            if [ "$build_rc" -eq 0 ]; then
                 COMPLETED=$((COMPLETED + 1))
+            elif [ "$build_rc" -eq 2 ]; then
+                SKIPPED=$((SKIPPED + 1))
             else
                 FAILED=$((FAILED + 1))
             fi
@@ -336,16 +349,17 @@ run_static_builds() {
     
     echo "Total builds: $TOTAL_BUILDS"
     echo "Successful: $COMPLETED"
+    echo "Skipped (unsupported arch): $SKIPPED"
     echo "Failed: $FAILED"
     echo "Build time: ${BUILD_MINS}m ${BUILD_SECS}s"
-    
+
     log_info "Cleaning up empty directories..."
-    find ${OUTPUT_DIR} -type d -empty -delete 2>/dev/null || true
-    
-    # Return success if at least one build succeeded
-    if [ $COMPLETED -gt 0 ]; then
-        return 0
-    else
+    find "${OUTPUT_DIR}" -type d -empty -delete 2>/dev/null || true
+
+    # Fail the run if ANY build failed, so CI and callers can detect partial
+    # failures. Skips (return 2) are not failures.
+    if [ $FAILED -gt 0 ]; then
         return 1
     fi
+    return 0
 }
