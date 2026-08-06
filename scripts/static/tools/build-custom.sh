@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="$(cd "$SCRIPT_DIR/../../lib" 2>/dev/null && pwd)" || LIB_DIR="/build/scripts/lib"
 source "$LIB_DIR/common.sh"
 source "$LIB_DIR/core/compile_flags.sh"
+source "$LIB_DIR/core/os_targets.sh"
 source "$LIB_DIR/build_helpers.sh"
 
 TOOL_NAME="custom"
@@ -13,6 +14,47 @@ TOOL_NAME="custom"
 SUPPORTED_OS="any"
 SOURCE_PATH="/build/example-custom-tool"    # Your source code directory
 BINARY_NAME="custom"                        # Name of final executable
+
+# Resolve the target OS from the arch name (e.g. x86_64_freebsd -> freebsd).
+# Non-Zig arches are always Linux.
+custom_target_os() {
+    local arch=$1
+    if [ "${USE_ZIG:-0}" != "1" ]; then
+        echo "linux"
+        return
+    fi
+    local os
+    for os in "${ALL_OS_TARGETS[@]}"; do
+        if [[ "$arch" == *"_${os}" ]]; then
+            echo "$os"
+            return
+        fi
+    done
+    echo "linux"
+}
+
+# Human-readable C library for the target, so a cross-built binary reports the
+# libc it was actually linked against instead of guessing from preprocessor
+# macros (musl defines no identifying macro, and Zig targets use the platform
+# libc, not musl/glibc).
+custom_libc_desc() {
+    local target_os=$1
+    if [ "${USE_ZIG:-0}" != "1" ]; then
+        echo "${LIBC_TYPE:-musl}"
+        return
+    fi
+    case "$target_os" in
+        macos|ios|tvos|watchos|visionos|maccatalyst) echo "Darwin libSystem" ;;
+        freebsd)   echo "FreeBSD libc" ;;
+        openbsd)   echo "OpenBSD libc" ;;
+        netbsd)    echo "NetBSD libc" ;;
+        dragonfly) echo "DragonFly libc" ;;
+        windows)   echo "mingw-w64 (msvcrt)" ;;
+        wasi)      echo "wasi-libc" ;;
+        linux)     echo "musl (zig)" ;;
+        *)         echo "zig libc" ;;
+    esac
+}
 
 build_custom() {
     local arch=$1
@@ -44,7 +86,15 @@ build_custom() {
     
     export CFLAGS="$cflags"
     export LDFLAGS="$ldflags"
-    
+
+    # Authoritative target facts for the info box — the build system knows the
+    # exact arch/OS/libc, so the binary reports them instead of guessing.
+    local target_os
+    target_os=$(custom_target_os "$arch")
+    export STHENOS_ARCH="$arch"
+    export STHENOS_OS="$target_os"
+    export STHENOS_LIBC="$(custom_libc_desc "$target_os")"
+
     # Only export cross compiler for non-Zig builds
     if [ "${USE_ZIG:-0}" = "0" ]; then
         export_cross_compiler "$CROSS_COMPILE"
