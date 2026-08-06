@@ -16,7 +16,11 @@ check_missing() {
     if [ ! -f "$expected_file" ]; then
         echo "Generating expected binaries list from x86_64..."
         if [ -d "output/x86_64" ]; then
-            find output/x86_64 -type f -executable 2>/dev/null | sed 's|output/x86_64/||' | sort > "$expected_file"
+            # Store tool names without the libc/platform suffix so a tool counts
+            # as present regardless of whether it built as .musl/.glibc/.uclibc
+            # or .zig[.exe] (cross-OS). Otherwise every Zig target reads as 0.
+            find output/x86_64 -type f -executable 2>/dev/null | sed 's|output/x86_64/||' \
+                | sed -E 's/\.(musl|glibc|uclibc|zig)(\.exe)?$//' | sort -u > "$expected_file"
         else
             echo "Error: No x86_64 output directory to generate expected list from"
             echo "Build x86_64 first: ./build --arch x86_64"
@@ -70,7 +74,13 @@ check_missing() {
         local arch_existing=()
         
         while IFS= read -r binary; do
-            if [ -f "output/$arch/$binary" ]; then
+            # Match the tool under any libc/platform suffix (.musl/.glibc/.uclibc/
+            # .zig/.zig.exe) as well as a bare name.
+            local found=0 candidate
+            for candidate in "output/$arch/$binary" "output/$arch/$binary".*; do
+                [ -e "$candidate" ] && { found=1; break; }
+            done
+            if [ "$found" = 1 ]; then
                 arch_existing+=("$(basename "$binary")")
             else
                 arch_missing+=("$(basename "$binary")")
@@ -241,8 +251,16 @@ run_in_container() {
     if [ -n "${LIBC_TYPE:-}" ]; then
         env_vars+=("-e" "LIBC_TYPE=$LIBC_TYPE")
     fi
-    
+
     # LIBC_TYPE is already added to env_vars if set
+
+    # Opt-in per-tool build flags forwarded into the container.
+    if [ -n "${DOOM_EMBED_WAD:-}" ]; then
+        env_vars+=("-e" "DOOM_EMBED_WAD=$DOOM_EMBED_WAD")
+    fi
+    if [ -n "${NMAP_EMBED_DATA:-}" ]; then
+        env_vars+=("-e" "NMAP_EMBED_DATA=$NMAP_EMBED_DATA")
+    fi
     
     if [ -n "${DEBUG_FLAGS:-}" ]; then
         env_vars+=($DEBUG_FLAGS)
@@ -401,6 +419,7 @@ for i in $(seq 1 $#); do
             echo "  curl-full   HTTP/HTTPS client with all protocols (FTP, LDAP, etc.)"
             echo "  microsocks  Lightweight SOCKS5 proxy server"
             echo "  oida-fuzzing-agent  On-target process supervisor for network fuzzing"
+            echo "  doom        Terminal Doom (doom-ascii); self-contained (shareware WAD embedded), runs over SSH/serial"
             echo "  shell       Shell utilities as static executables (output/<arch>/shell/)"
             echo "  custom      Custom tool template (musl, modify scripts/tools/build-custom.sh)"            
             echo ""
@@ -434,11 +453,12 @@ for i in $(seq 1 $#); do
             echo "  ARM 64-bit: aarch64 aarch64_be"
             echo "  x86 32-bit: i486 ix86le (i686)"
             echo "  x86 64-bit: x86_64"
-            echo "  MIPS 32-bit: mips32le mips32be mipsn32 mipsn32el"
+            echo "  MIPS 32-bit: mips32le mips32be mips32lesf mips32besf mips32r6el"
             echo "  MIPS 64-bit: mips64 mips64le mips64n32 mips64n32el"
             echo "  PowerPC: ppc32be ppc32le ppc64be ppc64le"
-            echo "  SuperH: sh2 sh2eb sh4 sh4eb"
-            echo "  Others: microblaze microblazeel or1k m68k s390x"
+            echo "  SuperH: sh2 sh2eb sh2fdpic sh2ebfdpic sh4 sh4eb"
+            echo "  SPARC: sparc64 sparcv8 (uclibc)"
+            echo "  Others: microblaze microblazeel or1k m68k m68k_coldfire nios2 arcle_hs38 loongarch64 s390x"
             echo "  RISC-V: riscv32 riscv64"
             echo "  Xtensa: xtensa (uclibc only)"
             echo ""
@@ -650,11 +670,8 @@ else
     DEBUG_CMD=""
 fi
 
-# LIBC_TYPE is left unset unless explicitly specified via --libc flag
-# or when building custom-glibc tool
-if [ "$TOOLS" = "custom-glibc" ]; then
-    LIBC_TYPE="glibc"
-fi
+# LIBC_TYPE is left unset unless explicitly specified via --libc flag.
+# (Use `custom --libc glibc` to build the example tool against glibc.)
 
 
 if [ "$ARCHITECTURES" != "all" ]; then

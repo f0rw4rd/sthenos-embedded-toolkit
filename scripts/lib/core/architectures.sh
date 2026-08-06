@@ -7,7 +7,7 @@ if [ -z "${ALL_ARCHITECTURES+x}" ]; then
     arm32v5le arm32v5lehf arm32v7le arm32v7lehf arm32v7neon
     armeb armebv7hf armebhf armel armelhf armv5l armv5lhf armv6 armv6sf armv7m armv7r
     
-    mips32be mips32le mips32besf mips32lesf
+    mips32be mips32le mips32besf mips32lesf mips32r6el
     mips64 mips64le mips64n32 mips64n32el
     
     ppc32be ppc32besf ppc32le ppc32lesf
@@ -16,9 +16,9 @@ if [ -z "${ALL_ARCHITECTURES+x}" ]; then
     riscv32 riscv64
     
     m68k m68k_coldfire microblaze microblazeel or1k s390x
-    sh2 sh2eb sh4 sh4eb loongarch64
+    sh2 sh2eb sh2fdpic sh2ebfdpic sh4 sh4eb loongarch64
 
-    sparc64 nios2 arcle_hs38 xtensa
+    sparc64 sparcv8 nios2 arcle_hs38 xtensa
 )
 fi
 
@@ -598,16 +598,16 @@ config_arch=nios2
 bootlin_sha512=23f69ddc48a279ec63acd3647c5dfab614609ec76d11b6ff8058ade36d9c2b5e47781d69d4cf21e9fb114224f32e251c3aab57b2446b53c6a2203e2bce745c92
 "
 
+# ColdFire (MCF5208) is MMU-less, so glibc is impossible — Bootlin only ships a
+# uClibc toolchain for it. Use that instead of the never-existent glibc build.
 ARCH_CONFIG[m68k_coldfire]="
-musl_name=
-musl_cross=
-glibc_name=m68k-buildroot-linux-gnu
-glibc_dir=m68k-buildroot-linux-gnu-coldfire
-bootlin_arch=m68k-coldfire
-bootlin_url=m68k-coldfire--glibc--stable-2024.02-1.tar.bz2
+uclibc_name=m68k-buildroot-uclinux-uclibc
+uclibc_cross=m68k-buildroot-uclinux-uclibc
+custom_uclibc_url=https://toolchains.bootlin.com/downloads/releases/toolchains/m68k-coldfire--uclibc--stable-2024.02-1.tar.bz2
+custom_uclibc_sha512=dbdb914177d7edffedbb341b03dea23b595e1e887602f10b65f7ce0d4252abb5307120affa8ed0fcf706594d9d2a19c1306650c3e6d2078ef287f0d02d746d71
+toolchain_extract_subdir=m68k-coldfire--uclibc--stable-2024.02-1
 cflags=-mcpu=5208 -fPIC -mxgot
 config_arch=m68k
-bootlin_sha512=b6fdec9e608f1459d3bc53250cc1570b76757c972df1a5526265cf232d4d12aa272dba1ceefb6dc723ca38108e4f6ae268df4def02f863a74579b24a1e86d945
 "
 
 ARCH_CONFIG[arcle_hs38]="
@@ -631,6 +631,47 @@ cflags=-mlongcalls
 config_arch=xtensa
 "
 
+# MIPS32 Release 6 (little-endian). Distinct ISA from R2 (mips32le); glibc-only
+# via Bootlin. Shares the mipsel compiler prefix with mips32le, so it needs its
+# own glibc_dir to avoid clobbering that toolchain.
+ARCH_CONFIG[mips32r6el]="
+glibc_name=mipsel-buildroot-linux-gnu
+glibc_dir=mipsel-buildroot-linux-gnu-r6
+bootlin_arch=mips32r6el
+bootlin_url=mips32r6el--glibc--stable-2024.05-1.tar.xz
+cflags=-march=mips32r6 -mabi=32
+config_arch=mips
+bootlin_sha512=6bd751307daa36c47d6d3e4c6764d0cf3f8e60704a089d217af05ea1133855de210a76995d840364a742da0767a3175dc44d081d708e9d50afa610561e3f46c4
+"
+
+# SPARC V8 (32-bit, big-endian) — LEON/legacy SPARC. Bootlin ships uClibc only.
+ARCH_CONFIG[sparcv8]="
+uclibc_name=sparc-buildroot-linux-uclibc
+uclibc_cross=sparc-buildroot-linux-uclibc
+custom_uclibc_url=https://toolchains.bootlin.com/downloads/releases/toolchains/sparcv8--uclibc--stable-2024.05-1.tar.xz
+custom_uclibc_sha512=a19b55ba2643c5299e9fe5202edecaa6aa46e83388887d95643363fc95f5df4072624716a016fb869f2c81875c181a1e7aa889be92d10fbee2791deb10d6f135
+toolchain_extract_subdir=sparcv8--uclibc--stable-2024.05-1
+cflags=-mcpu=v8
+config_arch=sparc
+"
+
+# SuperH-2 FDPIC (musl.cc) — position-independent variant for MMU-less SH-2.
+ARCH_CONFIG[sh2fdpic]="
+musl_name=sh2-linux-muslfdpic
+musl_cross=sh2-linux-muslfdpic
+cflags=-m2
+config_arch=sh
+musl_sha512=1c9927a6cd285aae6a23b621aa2976228b1382eb9c980c1562082485fb8a519e4490e6fe71f3909a0859b4e58240619eb14a3863ad23d8e64ced32116660272d
+"
+
+ARCH_CONFIG[sh2ebfdpic]="
+musl_name=sh2eb-linux-muslfdpic
+musl_cross=sh2eb-linux-muslfdpic
+cflags=-m2 -mb
+config_arch=sh
+musl_sha512=4d32e1f6a464dec819eb4ea3119c469b99fbee0462845987e5b0ae911362debf671f3ece2f47adf9999ebffecb7701867ffb45411a28d2389e90841f64185c06
+"
+
 ARCH_CONFIG[loongarch64]="
 musl_name=loongarch64-unknown-linux-musl
 musl_cross=loongarch64-unknown-linux-musl
@@ -639,10 +680,10 @@ bootlin_arch=
 bootlin_url=
 cflags=-march=loongarch64 -mabi=lp64d
 config_arch=loongarch64
-custom_musl_url=https://github.com/loong64/cross-tools/releases/download/20250911/x86_64-cross-tools-loongarch64-unknown-linux-musl-stable.tar.xz
-custom_glibc_url=https://github.com/loong64/cross-tools/releases/download/20250911/x86_64-cross-tools-loongarch64-unknown-linux-gnu-stable.tar.xz
-custom_musl_sha512=f62c0730cf0275bf99e75a228424586bde62dac93fbfb8012f8b6e49b5f93edd65cc1ee4a9ff1a460ce6f2470a32f605d28eb0b12f761a60a4ad4b8daff81065
-custom_glibc_sha512=f8e26d6b5642926870f46ea610c930fa1e57e0b7064403bdd4bf2b726b89e0d575528642938d6e0073fe3a9a6422a7d01ca1e123a90850d75f8c127b10fd95fd
+custom_musl_url=https://github.com/loong64/cross-tools/releases/download/20260730/x86_64-cross-tools-loongarch64-unknown-linux-musl-stable.tar.xz
+custom_glibc_url=https://github.com/loong64/cross-tools/releases/download/20260730/x86_64-cross-tools-loongarch64-unknown-linux-gnu-stable.tar.xz
+custom_musl_sha512=e37c0ae3d46047db6f5e3e1928277e0990d27684060d16aef4e823723bfd1bf45ffe4df5465e18f0f6d86ffa77d451db07c8802c368954b0b10b9d55d4ddafae
+custom_glibc_sha512=2fe4014d832a01fda41e21df519c981f5c9359c303d2fd6ff946f63333e822241dc70dbea1feb99e81c465e9ee2970de34a48295e8e96fec1ef23c268403178f
 "
 
 get_arch_field() {

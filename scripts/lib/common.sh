@@ -52,6 +52,7 @@ declare -A TOOL_SCRIPTS=(
     ["screen"]="$SCRIPT_DIR/../static/tools/build-screen.sh"
     ["mtd-utils"]="$SCRIPT_DIR/../static/tools/build-mtd-utils.sh"
     ["uboot-envtools"]="$SCRIPT_DIR/../static/tools/build-uboot-envtools.sh"
+    ["doom"]="$SCRIPT_DIR/../static/tools/build-doom.sh"
 )
 
 declare -A SHARED_LIB_SCRIPTS=(

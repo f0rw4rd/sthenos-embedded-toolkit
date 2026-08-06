@@ -8,58 +8,13 @@ source "$LIB_DIR/dependency_builder.sh"
 source "$LIB_DIR/core/compile_flags.sh"
 source "$LIB_DIR/build_helpers.sh"
 source "$LIB_DIR/tools.sh"
+source "$LIB_DIR/core/openssl_targets.sh"
 
 TOOL_NAME="openssl"
 SUPPORTED_OS="linux,android,freebsd,openbsd,netbsd,macos,windows"
 OPENSSL_VERSION="${OPENSSL_VERSION:-1.1.1w}"
 OPENSSL_URL="https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz"
 OPENSSL_SHA512="b4c625fe56a4e690b57b6a011a225ad0cb3af54bd8fb67af77b5eceac55cc7191291d96a660c5b568a08a2fbf62b4612818e7cca1bb95b2b6b4fc649b0552b6d"
-
-get_openssl_target() {
-    local arch=$1
-    local openssl_target
-
-    # Zig cross-platform targets — map to OpenSSL's OS-specific Configure names
-    case $arch in
-        x86_64_macos)       echo "darwin64-x86_64-cc";      return ;;
-        aarch64_macos)      echo "darwin64-arm64-cc";       return ;;
-        x86_64_freebsd)     echo "BSD-x86_64";              return ;;
-        aarch64_freebsd)    echo "BSD-generic64";           return ;;
-        riscv64_freebsd)    echo "BSD-generic64";           return ;;
-        x86_64_openbsd)     echo "BSD-x86_64";              return ;;
-        aarch64_openbsd)    echo "BSD-generic64";           return ;;
-        x86_64_netbsd)      echo "BSD-x86_64";              return ;;
-        aarch64_netbsd)     echo "BSD-generic64";           return ;;
-        x86_64_windows)     echo "mingw64";                 return ;;
-        aarch64_windows)    echo "mingw64";                 return ;;
-    esac
-
-    case $arch in
-        x86_64) openssl_target="linux-x86_64" ;;
-        ix86le|i486) openssl_target="linux-x86" ;;
-        armv7m|armv7r) openssl_target="linux-generic32" ;;
-        arm*)
-            if [[ "$arch" == *"v7"* ]]; then
-                openssl_target="linux-armv4"
-            else
-                openssl_target="linux-generic32"
-            fi
-            ;;
-        aarch64*) openssl_target="linux-aarch64" ;;
-        mips64n32*) openssl_target="linux-mips64" ;;
-        mips64*) openssl_target="linux64-mips64" ;;
-        mips*) openssl_target="linux-mips32" ;;
-        ppc64*) openssl_target="linux-ppc64le" ;;
-        ppc32*) openssl_target="linux-ppc" ;;
-        riscv64) openssl_target="linux-generic64" ;;
-        riscv32) openssl_target="linux-generic32" ;;
-        s390x) openssl_target="linux64-s390x" ;;
-        sh*) openssl_target="linux-generic32" ;;
-        *) openssl_target="linux-generic32" ;;
-    esac
-
-    echo "$openssl_target"
-}
 
 configure_openssl_cli() {
     local arch=$1
@@ -70,19 +25,8 @@ configure_openssl_cli() {
 
     local openssl_target=$(get_openssl_target "$arch")
 
-    # Disable assembly for Thumb-only ARM profiles and aarch64/thumb Windows
-    # (which use the mingw64 Configure target expecting x86_64 asm).
-    local openssl_asm_opt=""
-    case "$arch" in
-        armv7m|armv7r) openssl_asm_opt="no-asm" ;;
-        aarch64_windows|thumb_windows) openssl_asm_opt="no-asm" ;;
-    esac
-
-    # riscv32 lacks legacy __NR_io_getevents syscall
-    local openssl_afalg_opt=""
-    case "$arch" in
-        riscv32) openssl_afalg_opt="no-afalgeng" ;;
-    esac
+    local openssl_asm_opt=$(get_openssl_asm_opt "$arch")
+    local openssl_afalg_opt=$(get_openssl_afalg_opt "$arch")
 
     # Save and unset CROSS_COMPILE -- OpenSSL's Configure uses it to prefix
     # compiler names, which conflicts with our already-set CC.
@@ -95,13 +39,7 @@ configure_openssl_cli() {
         openssl_static_opt=""
     fi
 
-    # devcrypto engine needs Linux /dev/crypto headers
-    local openssl_devcrypto_opt=""
-    case "$arch" in
-        *_macos|*_freebsd|*_openbsd|*_netbsd|*_dragonfly)
-            openssl_devcrypto_opt="no-devcryptoeng"
-            ;;
-    esac
+    local openssl_devcrypto_opt=$(get_openssl_devcrypto_opt "$arch")
 
     ./Configure \
         --prefix="/tmp/openssl-install-$$" \

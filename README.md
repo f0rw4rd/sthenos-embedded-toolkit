@@ -68,7 +68,7 @@ Select your architecture → Download the tools you need.
 **50+ architectures** including:
 - **ARM**: aarch64, arm32v5le, arm32v7le, armeb, armv6, armv7m, armv7r, etc.
 - **x86**: x86_64, i486, ix86le  
-- **MIPS**: mips32be/le, mips64, mipsn32, with soft-float variants
+- **MIPS**: mips32be/le, mips32r6el, mips64, mips64n32, with soft-float variants
 - **PowerPC**: ppc32be, ppc64le, powerpc64, with soft-float variants
 - **RISC-V**: riscv32, riscv64
 - **Other**: m68k, microblaze, or1k, s390x, sh2/4, sparc64

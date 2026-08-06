@@ -178,67 +178,163 @@ static inline const char* get_endianness() {
     #endif
 }
 
-static inline const char* get_c_library() {
-    #ifdef __GLIBC__
-        return "GNU libc (glibc)";
-    #elif defined(__musl__)
-        return "musl libc";
+static inline const char* get_operating_system() {
+    #if defined(_WIN32)
+        return "Windows";
+    #elif defined(__APPLE__)
+        return "macOS/Darwin";
+    #elif defined(__FreeBSD__)
+        return "FreeBSD";
+    #elif defined(__OpenBSD__)
+        return "OpenBSD";
+    #elif defined(__NetBSD__)
+        return "NetBSD";
+    #elif defined(__DragonFly__)
+        return "DragonFly BSD";
+    #elif defined(__wasi__)
+        return "WASI";
+    #elif defined(__linux__)
+        return "Linux";
     #else
-        return "musl libc (static)";
+        return "unknown";
     #endif
 }
 
-static inline void print_build_info_common(const char *info_title, const char *build_type) {
-    char hostname[256];
-    char buffer[64];
-    
-    printf("┌─────────────────────────────────────────────┐\n");
-    printf("│         %-35s │\n", info_title);
-    printf("├─────────────────────────────────────────────┤\n");
-    
-    #if defined(_WIN32) || defined(NO_HOSTNAME)
-    strcpy(hostname, "N/A");
-    printf("│ Hostname: %-33s │\n", hostname);
+static inline const char* get_c_library() {
+    // musl defines no identifying macro, so it is inferred: a Linux target that
+    // is neither glibc nor uClibc is musl in this toolkit. Non-Linux Zig targets
+    // report their platform libc.
+    #ifdef __GLIBC__
+        return "GNU libc (glibc)";
+    #elif defined(__UCLIBC__)
+        return "uClibc";
+    #elif defined(__wasi__)
+        return "wasi-libc";
+    #elif defined(_WIN32)
+        return "mingw-w64 (msvcrt)";
+    #elif defined(__APPLE__)
+        return "Darwin libSystem";
+    #elif defined(__FreeBSD__)
+        return "FreeBSD libc";
+    #elif defined(__OpenBSD__)
+        return "OpenBSD libc";
+    #elif defined(__NetBSD__)
+        return "NetBSD libc";
+    #elif defined(__linux__)
+        return "musl (static)";
     #else
-    if (gethostname(hostname, sizeof(hostname)) == 0) {
-        printf("│ Hostname: %-33s │\n", hostname);
+        return "unknown";
+    #endif
+}
+
+// Prefer the authoritative target facts injected by the build system
+// (STHENOS_ARCH/OS/LIBC). They are always #defined by the Makefile but expand
+// empty on a standalone `make`, in which case fall back to compile-time
+// preprocessor detection.
+static inline const char* target_arch_str(void) {
+    #ifdef STHENOS_ARCH
+        if (STHENOS_ARCH[0]) return STHENOS_ARCH;
+    #endif
+    return get_architecture();
+}
+
+static inline const char* target_os_str(void) {
+    #ifdef STHENOS_OS
+        if (STHENOS_OS[0]) return STHENOS_OS;
+    #endif
+    return get_operating_system();
+}
+
+static inline const char* target_libc_str(void) {
+    #ifdef STHENOS_LIBC
+        if (STHENOS_LIBC[0]) return STHENOS_LIBC;
+    #endif
+    return get_c_library();
+}
+
+// Zig cross-compiles with clang, which advertises itself as GCC 4.2.1 via the
+// __GNUC__ macros; check __clang__ first so the report is accurate.
+static inline void get_compiler_str(char *buf, size_t n) {
+    #if defined(__clang__)
+        snprintf(buf, n, "Clang %d.%d.%d", __clang_major__, __clang_minor__, __clang_patchlevel__);
+    #elif defined(__GNUC__)
+        #ifdef __GNUC_PATCHLEVEL__
+            snprintf(buf, n, "GCC %d.%d.%d", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
+        #else
+            snprintf(buf, n, "GCC %d.%d", __GNUC__, __GNUC_MINOR__);
+        #endif
+    #else
+        snprintf(buf, n, "unknown");
+    #endif
+}
+
+// Fixed inner width of the info box, in display columns. All rows pad to this
+// so the right border always lines up regardless of value length.
+#define CUSTOM_BOX_W 54
+
+static inline void box_rule(const char *left, const char *right) {
+    int i;
+    fputs(left, stdout);
+    for (i = 0; i < CUSTOM_BOX_W; i++) fputs("─", stdout);
+    fputs(right, stdout);
+    fputc('\n', stdout);
+}
+
+static inline void box_row(const char *key, const char *val) {
+    char buf[256];
+    // Content is ASCII, so byte count == column count and %-*s aligns cleanly.
+    snprintf(buf, sizeof(buf), " %s: %s", key, val);
+    printf("│%-*s│\n", CUSTOM_BOX_W, buf);
+}
+
+static inline void box_center(const char *text) {
+    char buf[256];
+    int len = (int)strlen(text);
+    int pad = (CUSTOM_BOX_W - len) / 2;
+    if (pad < 0) pad = 0;
+    snprintf(buf, sizeof(buf), "%*s%s", pad, "", text);
+    printf("│%-*s│\n", CUSTOM_BOX_W, buf);
+}
+
+static inline void print_build_info_common(const char *info_title, const char *build_type) {
+    char buf[256];
+
+    box_rule("┌", "┐");
+    box_center(info_title);
+    box_rule("├", "┤");
+
+    #if !defined(_WIN32) && !defined(NO_HOSTNAME)
+    {
+        char hostname[256];
+        if (gethostname(hostname, sizeof(hostname)) == 0)
+            box_row("Host", hostname);
     }
     #endif
-    
-    printf("│ Architecture: %-29s │\n", get_architecture());
-    printf("│ Endianness: %-31s │\n", get_endianness());
-    
-    #ifdef __GNUC__
-        #ifdef __GNUC_PATCHLEVEL__
-            snprintf(buffer, sizeof(buffer), "GCC %d.%d.%d", 
-                     __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
-        #else
-            snprintf(buffer, sizeof(buffer), "GCC %d.%d", 
-                     __GNUC__, __GNUC_MINOR__);
-        #endif
-        printf("│ Compiler: %-33s │\n", buffer);
+
+    box_row("Target", target_arch_str());
+    box_row("CPU", get_architecture());
+    box_row("OS", target_os_str());
+    box_row("Endianness", get_endianness());
+    box_row("C library", target_libc_str());
+
+    #if defined(__GLIBC__) && defined(__GLIBC_MINOR__)
+        snprintf(buf, sizeof(buf), "%d.%d", __GLIBC__, __GLIBC_MINOR__);
+        box_row("libc version", buf);
     #endif
-    
-    printf("│ C Library: %-32s │\n", get_c_library());
-    
-    #ifdef __GLIBC__
-        #ifdef __GLIBC_MINOR__
-            snprintf(buffer, sizeof(buffer), "%d.%d", __GLIBC__, __GLIBC_MINOR__);
-            printf("│ Version: %-34s │\n", buffer);
-        #endif
+
+    get_compiler_str(buf, sizeof(buf));
+    box_row("Compiler", buf);
+
+    snprintf(buf, sizeof(buf), "%zu bytes", sizeof(void*));
+    box_row("Pointer size", buf);
+    box_row("Build type", build_type);
+
+    #if !defined(_WIN32) && !defined(NO_PID)
+        snprintf(buf, sizeof(buf), "%d", (int)getpid());
+        box_row("PID", buf);
     #endif
-    
-    snprintf(buffer, sizeof(buffer), "%zu bytes", sizeof(void*));
-    printf("│ Pointer Size: %-29s │\n", buffer);
-    printf("│ Build Type: %-31s │\n", build_type);
-    
-    #if defined(_WIN32) || defined(NO_PID)
-    printf("│ Process PID: %-30s │\n", "N/A");
-    #else
-    printf("│ Process PID: %-30d │\n", getpid());
-    #endif
-    
-    printf("└─────────────────────────────────────────────┘\n");
+
+    box_rule("└", "┘");
 }
 
 #endif
