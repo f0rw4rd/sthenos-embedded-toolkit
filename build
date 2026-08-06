@@ -241,8 +241,16 @@ run_in_container() {
     if [ -n "${LIBC_TYPE:-}" ]; then
         env_vars+=("-e" "LIBC_TYPE=$LIBC_TYPE")
     fi
-    
+
     # LIBC_TYPE is already added to env_vars if set
+
+    # Opt-in per-tool build flags forwarded into the container.
+    if [ -n "${DOOM_EMBED_WAD:-}" ]; then
+        env_vars+=("-e" "DOOM_EMBED_WAD=$DOOM_EMBED_WAD")
+    fi
+    if [ -n "${NMAP_EMBED_DATA:-}" ]; then
+        env_vars+=("-e" "NMAP_EMBED_DATA=$NMAP_EMBED_DATA")
+    fi
     
     if [ -n "${DEBUG_FLAGS:-}" ]; then
         env_vars+=($DEBUG_FLAGS)
