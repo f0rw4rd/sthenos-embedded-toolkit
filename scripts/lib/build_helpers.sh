@@ -332,8 +332,8 @@ is_big_endian_arch() {
         aarch64_be|armeb|armebhf|armebv7hf|\
         mips32be|mips32besf|mips64|mips64n32|\
         ppc32be|ppc32besf|ppc64be|\
-        sh2eb|sh4eb|\
-        m68k|m68k_coldfire|s390x|microblaze|or1k|sparc64)
+        sh2eb|sh2ebfdpic|sh4eb|\
+        m68k|m68k_coldfire|s390x|microblaze|or1k|sparc64|sparcv8)
             return 0 ;;
         *)
             return 1 ;;
