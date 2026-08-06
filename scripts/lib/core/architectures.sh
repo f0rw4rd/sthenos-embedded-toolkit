@@ -124,6 +124,7 @@ ARCH_CONFIG[arm32v7le]="
 musl_name=armv7l-linux-musleabihf
 musl_cross=armv7l-linux-musleabihf
 glibc_name=arm-buildroot-linux-gnueabihf
+glibc_dir=arm-buildroot-linux-gnueabihf-armv7
 bootlin_arch=armv7-eabihf
 bootlin_url=armv7-eabihf--glibc--stable-2024.02-1.tar.bz2
 cflags=-march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard -mthumb -mthumb-interwork
@@ -136,6 +137,7 @@ ARCH_CONFIG[arm32v7lehf]="
 musl_name=armv7l-linux-musleabihf
 musl_cross=armv7l-linux-musleabihf
 glibc_name=arm-buildroot-linux-gnueabihf
+glibc_dir=arm-buildroot-linux-gnueabihf-armv7
 bootlin_arch=armv7-eabihf
 bootlin_url=armv7-eabihf--glibc--stable-2024.02-1.tar.bz2
 cflags=-march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -mthumb -mthumb-interwork
@@ -148,6 +150,7 @@ ARCH_CONFIG[arm32v7neon]="
 musl_name=armv7l-linux-musleabihf
 musl_cross=armv7l-linux-musleabihf
 glibc_name=arm-buildroot-linux-gnueabihf
+glibc_dir=arm-buildroot-linux-gnueabihf-armv7
 bootlin_arch=armv7-eabihf
 bootlin_url=armv7-eabihf--glibc--stable-2024.02-1.tar.bz2
 cflags=-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mthumb -mthumb-interwork
@@ -183,6 +186,7 @@ ARCH_CONFIG[armv6]="
 musl_name=armv6-linux-musleabihf
 musl_cross=armv6-linux-musleabihf
 glibc_name=arm-buildroot-linux-gnueabihf
+glibc_dir=arm-buildroot-linux-gnueabihf-armv6
 bootlin_arch=armv6-eabihf
 bootlin_url=armv6-eabihf--glibc--stable-2024.02-1.tar.bz2
 cflags=-march=armv6 -mfpu=vfp -mfloat-abi=hard -mno-unaligned-access
@@ -469,6 +473,7 @@ ARCH_CONFIG[m68k]="
 musl_name=m68k-linux-musl
 musl_cross=m68k
 glibc_name=m68k-buildroot-linux-gnu
+glibc_dir=m68k-buildroot-linux-gnu-68xxx
 bootlin_arch=m68k
 bootlin_url=m68k-68xxx--glibc--stable-2024.02-1.tar.bz2
 cflags=-mcpu=68020
@@ -597,6 +602,7 @@ ARCH_CONFIG[m68k_coldfire]="
 musl_name=
 musl_cross=
 glibc_name=m68k-buildroot-linux-gnu
+glibc_dir=m68k-buildroot-linux-gnu-coldfire
 bootlin_arch=m68k-coldfire
 bootlin_url=m68k-coldfire--glibc--stable-2024.02-1.tar.bz2
 cflags=-mcpu=5208 -fPIC -mxgot
@@ -658,6 +664,24 @@ get_arch_field() {
 
 get_musl_toolchain() { get_arch_field "$1" "musl_name"; }
 get_glibc_toolchain() { get_arch_field "$1" "glibc_name"; }
+
+# Directory name under toolchains-glibc/ for this arch's glibc toolchain.
+# Several arches share a glibc_name (== compiler prefix) but ship DIFFERENT
+# Bootlin tarballs targeting incompatible CPUs (e.g. armv6 vs armv7 both use
+# arm-buildroot-linux-gnueabihf; m68k 68xxx vs m68k_coldfire both use
+# m68k-buildroot-linux-gnu). Keying the install dir on glibc_name alone makes
+# them collide — whichever downloads first wins and the other silently links
+# against the wrong CPU's toolchain. When an arch sets an explicit glibc_dir,
+# use it so each incompatible toolchain gets its own directory; otherwise fall
+# back to glibc_name (unchanged behavior for non-colliding arches).
+get_glibc_dir() {
+    local dir=$(get_arch_field "$1" "glibc_dir" 2>/dev/null)
+    if [ -n "$dir" ]; then
+        echo "$dir"
+    else
+        get_arch_field "$1" "glibc_name"
+    fi
+}
 get_bootlin_url() { get_arch_field "$1" "bootlin_url"; }
 get_musl_sha512() { get_arch_field "$1" "musl_sha512"; }
 get_bootlin_sha512() { get_arch_field "$1" "bootlin_sha512"; }

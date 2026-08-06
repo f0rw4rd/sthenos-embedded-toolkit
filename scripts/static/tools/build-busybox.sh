@@ -68,7 +68,19 @@ build_busybox() {
     
     if [ "$variant" = "nodrop" ]; then
         log_tool "busybox" "Applying nodrop modifications..."
-        grep -e "applet:.*BB_SUID_DROP" -rl . | xargs sed -i 's/\(applet:.*\)BB_SUID_DROP/\1BB_SUID_MAYBE/g' || true
+        # Rewrite BB_SUID_DROP -> BB_SUID_MAYBE so applets keep SUID privileges.
+        # If the upstream marker moved (version bump), the transform would match
+        # nothing and we'd silently ship a binary identical to standard busybox —
+        # the exact opposite of this variant's purpose. Fail loudly instead.
+        local nodrop_files
+        nodrop_files=$(grep -e "applet:.*BB_SUID_DROP" -rl .) || {
+            log_tool_error "busybox" "nodrop: no BB_SUID_DROP markers found (upstream layout changed?)"
+            return 1
+        }
+        echo "$nodrop_files" | xargs sed -i 's/\(applet:.*\)BB_SUID_DROP/\1BB_SUID_MAYBE/g' || {
+            log_tool_error "busybox" "nodrop: failed to rewrite BB_SUID_DROP markers"
+            return 1
+        }
     fi
     
     local cflags=$(get_compile_flags "$arch" "static" "$TOOL_NAME")

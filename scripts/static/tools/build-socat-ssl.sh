@@ -107,7 +107,7 @@ build_socat_ssl() {
     mkdir -p "$(dirname "$output_path")"
     cp socat "$output_path"
     
-    local size=$(ls -lh "/build/output/$arch/socat-ssl" | awk '{print $5}')
+    local size=$(get_binary_size "$output_path")
     log_tool "socat-ssl" "Built successfully for $arch ($size)"
     
     cleanup_build_dir "$build_dir"

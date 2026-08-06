@@ -151,7 +151,8 @@ build_openssl_cli() {
     download_toolchain "$arch" || return 1
 
     # Build zlib dependency
-    local zlib_dir=$(build_zlib_cached "$arch") || {
+    local zlib_dir
+    zlib_dir=$(build_zlib_cached "$arch") || {
         log_tool_error "$TOOL_NAME" "Failed to build zlib for $arch"
         return 1
     }

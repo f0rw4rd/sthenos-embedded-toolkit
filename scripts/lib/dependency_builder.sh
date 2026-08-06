@@ -377,7 +377,7 @@ build_zlib_cached() {
     build_dependency_generic \
         "zlib" \
         "$version" \
-        "https://zlib.net/zlib-$version.tar.gz" \
+        "https://github.com/madler/zlib/releases/download/v$version/zlib-$version.tar.gz" \
         "zlib-$version" \
         "$arch" \
         configure_zlib \

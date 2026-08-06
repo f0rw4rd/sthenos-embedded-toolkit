@@ -59,7 +59,13 @@ main() {
     mkdir -p "$build_dir"
     cd "$build_dir"
     
-    cp -r "$SOURCE_DIR"/* "$build_dir/"
+    # Copy sources including dotfiles; a bare "$SOURCE_DIR"/* would leave the
+    # glob literal (and fail under set -e) when the dir has no visible entries.
+    if [ -z "$(ls -A "$SOURCE_DIR" 2>/dev/null)" ]; then
+        log_error "Source directory is empty: $SOURCE_DIR"
+        return 1
+    fi
+    cp -a "$SOURCE_DIR"/. "$build_dir/"
     
     log_debug "CC=$CC"
     log_debug "CFLAGS=$cflags"

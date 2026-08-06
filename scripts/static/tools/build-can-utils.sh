@@ -7,17 +7,22 @@ source "$LIB_DIR/common.sh"        # Core functions: setup_arch, download_source
 source "$LIB_DIR/core/compile_flags.sh"   # Architecture-specific compiler flags
 source "$LIB_DIR/build_helpers.sh"  # Build utilities: standard_configure, install_binary, etc.
 
+# can-utils is SocketCAN — Linux kernel headers only (linux/can.h).
+SUPPORTED_OS="linux,android"
 CAN_UTILS_VERSION="${CAN_UTILS_VERSION:-2025.01}"
 CAN_UTILS_URL="https://github.com/linux-can/can-utils/archive/refs/tags/v${CAN_UTILS_VERSION}.tar.gz"
 CAN_UTILS_SHA512="bc5639c5d93af51cfb5920bc13efec2a660064d1809cb2cee9b234079d5288bc9db2bedf85fe841b8493f5554fbfbbe9f4bf5a88d8957f4a8ccdc3a1abf74153"
 
 build_can_utils() {
     local arch=$1
-    local build_dir=$(create_build_dir "can-utils" "$arch")
     local TOOL_NAME="can-utils"
+
+    check_tool_support "$SUPPORTED_OS" "$TOOL_NAME" || return 1
+
+    local build_dir=$(create_build_dir "can-utils" "$arch")
     local can_dir=$(get_output_dir "$arch" "can-utils")
-    
-    if [ -d "$can_dir" ] && [ "$(ls -A "$can_dir" 2>/dev/null)" ]; then
+
+    if [ "${SKIP_IF_EXISTS:-true}" = "true" ] && [ -d "$can_dir" ] && [ "$(ls -A "$can_dir" 2>/dev/null)" ]; then
         local tool_count=$(ls -1 "$can_dir" | wc -l)
         log_tool "can-utils" "Already built for $arch ($tool_count tools in ${can_dir##*/})"
         return 0
@@ -60,12 +65,12 @@ build_can_utils() {
     local installed_count=0
     for tool in $tools; do
         if [ -f "$tool" ]; then
-            $STRIP "$tool"
+            $STRIP "$tool" 2>/dev/null || true
             cp "$tool" "$can_dir/"
             installed_count=$((installed_count + 1))
         fi
     done
-    
+
     local extra_tools="canlogserver bcmserver slcan_attach slcand can-calc-bit-timing mcp251xfd-dump"
     for tool in $extra_tools; do
         if [ -f "$tool" ]; then

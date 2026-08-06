@@ -97,8 +97,10 @@ build_shared_library() {
     local log_enabled="${3:-true}"
     local debug="${4:-0}"
     
-    if ! setup_shared_arch "$arch"; then
-        return $?
+    setup_shared_arch "$arch"
+    local setup_rc=$?
+    if [ "$setup_rc" -ne 0 ]; then
+        return "$setup_rc"
     fi
     
     local script="${SHARED_LIB_SCRIPTS[$lib]}"

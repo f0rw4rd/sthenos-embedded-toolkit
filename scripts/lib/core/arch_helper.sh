@@ -87,8 +87,7 @@ get_musl_toolchain_dir() {
 
 get_glibc_toolchain_dir() {
     local arch="$1"
-    local glibc_name=$(get_glibc_toolchain "$arch")
-    echo "/build/toolchains-glibc/${glibc_name}"
+    echo "/build/toolchains-glibc/$(get_glibc_dir "$arch")"
 }
 
 get_uclibc_toolchain_dir() {
@@ -101,6 +100,7 @@ export -f get_arch_field
 export -f get_musl_toolchain
 export -f get_musl_cross
 export -f get_glibc_toolchain
+export -f get_glibc_dir
 export -f get_uclibc_toolchain
 export -f get_bootlin_arch
 export -f get_bootlin_url

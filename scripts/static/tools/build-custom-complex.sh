@@ -96,7 +96,12 @@ build_custom() {
     
     export CFLAGS="$cflags"
     export LDFLAGS="$ldflags"
-    export_cross_compiler "$CROSS_COMPILE"
+    # For Zig targets setup_arch sets CC="zig cc -target ..." and leaves
+    # CROSS_COMPILE empty; export_cross_compiler would clobber that with the host
+    # gcc and silently build a host binary. Only apply it for GCC toolchains.
+    if [ "${USE_ZIG:-0}" = "0" ]; then
+        export_cross_compiler "$CROSS_COMPILE"
+    fi
     
     
     
