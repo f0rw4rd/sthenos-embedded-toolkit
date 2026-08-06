@@ -313,9 +313,12 @@ run_static_builds() {
     echo ""
     
     echo "Checking toolchain availability for architectures: ${ARCHS_TO_BUILD[@]}"
+    # A single unavailable upstream toolchain (dead URL, flaky mirror) must not
+    # block every other architecture. Warn and continue: arches whose toolchain
+    # is missing fail individually in setup_arch and are counted as failures,
+    # while the rest still build.
     if ! ensure_toolchains "${ARCHS_TO_BUILD[@]}"; then
-        log_error "Failed to ensure toolchains are available"
-        return 1
+        log_warn "Some toolchains are unavailable; affected architectures will fail individually. Continuing with the toolchains that are present."
     fi
     echo ""
     
