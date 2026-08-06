@@ -10,6 +10,7 @@ _OS_TARGETS_LOADED=1
 readonly PRIMARY_OS_TARGETS=(
     "linux"      # Main target, most tools work here
     "windows"    # Common desktop/server OS
+    "freebsd"    # Widely deployed BSD
     "openbsd"    # Security-focused BSD
     "netbsd"     # Portable BSD variant
     "macos"      # Apple desktop/server
@@ -17,7 +18,6 @@ readonly PRIMARY_OS_TARGETS=(
 )
 
 # Secondary OS targets - supported but less commonly used
-# Note: FreeBSD doesn't support static linking with Zig
 readonly SECONDARY_OS_TARGETS=(
     "dragonfly"    # BSD variant with unique features
     "illumos"      # OpenSolaris derivative (SmartOS, OmniOS)
@@ -39,6 +39,7 @@ readonly ALL_OS_TARGETS=("${PRIMARY_OS_TARGETS[@]}" "${SECONDARY_OS_TARGETS[@]}"
 declare -A OS_FAMILY
 OS_FAMILY[linux]="unix"
 OS_FAMILY[android]="unix"
+OS_FAMILY[freebsd]="bsd"
 OS_FAMILY[openbsd]="bsd"
 OS_FAMILY[netbsd]="bsd"
 OS_FAMILY[dragonfly]="bsd"
@@ -165,7 +166,7 @@ get_default_abi() {
         linux)
             echo "musl"  # Static linking preferred
             ;;
-        openbsd|netbsd|dragonfly)
+        freebsd|openbsd|netbsd|dragonfly)
             echo ""  # BSDs use their native libc
             ;;
         macos|ios|tvos|watchos|visionos|maccatalyst)

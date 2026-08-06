@@ -502,8 +502,8 @@ if [ "$CHECK_MISSING" != true ] && [ -n "$ARCHITECTURES" ] && [ "$ARCHITECTURES"
             if ! is_supported_os "$TARGET_OS"; then
                 echo "Error: '$TARGET_OS' is not a supported OS target" >&2
                 echo "Supported OS targets:" >&2
-                echo "  Primary: linux, windows, openbsd, netbsd, macos, android" >&2
-                echo "  Secondary: dragonfly, illumos, solaris, aix, haiku, wasi, ios, tvos, watchos, visionos" >&2
+                echo "  Primary: ${PRIMARY_OS_TARGETS[*]}" >&2
+                echo "  Secondary: ${SECONDARY_OS_TARGETS[*]}" >&2
                 exit 1
             fi
             
