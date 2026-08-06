@@ -52,8 +52,7 @@ This will output something like:
 - **mips64le** - MIPS64 little-endian
 - **mips64n32** - MIPS64 N32 ABI big-endian
 - **mips64n32el** - MIPS64 N32 ABI little-endian
-- **mipsn32** - MIPS N32 ABI big-endian
-- **mipsn32el** - MIPS N32 ABI little-endian
+- **mips32r6el** - MIPS32 Release 6, little-endian (glibc)
 
 ### PowerPC Architectures  
 - **ppc32be** - PowerPC 32-bit big-endian, hard-float
@@ -71,17 +70,20 @@ This will output something like:
 - **arcle_hs38** - Synopsys ARC HS38 little-endian
 - **loongarch64** - LoongArch 64-bit
 - **m68k** - Motorola 68000 series
-- **m68k_coldfire** - Motorola ColdFire
+- **m68k_coldfire** - Motorola ColdFire (MMU-less; uClibc)
 - **microblaze** - Xilinx MicroBlaze big-endian
 - **microblazeel** - Xilinx MicroBlaze little-endian  
-- **nios2** - Altera Nios II
+- **nios2** - Altera Nios II (glibc)
 - **or1k** - OpenRISC 1000
 - **s390x** - IBM System/390 64-bit
 - **sh2** - SuperH SH-2
 - **sh2eb** - SuperH SH-2 big-endian
+- **sh2fdpic** - SuperH SH-2 FDPIC, little-endian (MMU-less)
+- **sh2ebfdpic** - SuperH SH-2 FDPIC, big-endian (MMU-less)
 - **sh4** - SuperH SH-4
 - **sh4eb** - SuperH SH-4 big-endian
 - **sparc64** - SPARC 64-bit
+- **sparcv8** - SPARC V8 32-bit / LEON (uClibc)
 
 ## Architecture Selection Guide
 
