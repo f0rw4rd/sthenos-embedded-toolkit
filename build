@@ -16,7 +16,11 @@ check_missing() {
     if [ ! -f "$expected_file" ]; then
         echo "Generating expected binaries list from x86_64..."
         if [ -d "output/x86_64" ]; then
-            find output/x86_64 -type f -executable 2>/dev/null | sed 's|output/x86_64/||' | sort > "$expected_file"
+            # Store tool names without the libc/platform suffix so a tool counts
+            # as present regardless of whether it built as .musl/.glibc/.uclibc
+            # or .zig[.exe] (cross-OS). Otherwise every Zig target reads as 0.
+            find output/x86_64 -type f -executable 2>/dev/null | sed 's|output/x86_64/||' \
+                | sed -E 's/\.(musl|glibc|uclibc|zig)(\.exe)?$//' | sort -u > "$expected_file"
         else
             echo "Error: No x86_64 output directory to generate expected list from"
             echo "Build x86_64 first: ./build --arch x86_64"
@@ -70,7 +74,13 @@ check_missing() {
         local arch_existing=()
         
         while IFS= read -r binary; do
-            if [ -f "output/$arch/$binary" ]; then
+            # Match the tool under any libc/platform suffix (.musl/.glibc/.uclibc/
+            # .zig/.zig.exe) as well as a bare name.
+            local found=0 candidate
+            for candidate in "output/$arch/$binary" "output/$arch/$binary".*; do
+                [ -e "$candidate" ] && { found=1; break; }
+            done
+            if [ "$found" = 1 ]; then
                 arch_existing+=("$(basename "$binary")")
             else
                 arch_missing+=("$(basename "$binary")")
