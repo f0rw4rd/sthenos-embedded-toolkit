@@ -5,6 +5,7 @@ source "$SCRIPT_DIR/logging.sh"
 source "$SCRIPT_DIR/core/compile_flags.sh"
 source "$SCRIPT_DIR/build_helpers.sh"
 source "$SCRIPT_DIR/tools.sh"
+source "$SCRIPT_DIR/core/openssl_targets.sh"
 
 DEPS_CACHE_DIR="/build/deps-cache"
 
@@ -106,93 +107,29 @@ configure_openssl() {
     local openssl_cflags=$(echo "$CFLAGS" | sed 's/-fno-pie//g; s/-no-pie//g')
     openssl_cflags="$openssl_cflags -fPIC"
     
-    local openssl_target
-    # Zig cross-platform targets — OpenSSL's OS-specific Configure names
-    case $arch in
-        x86_64_macos)       openssl_target="darwin64-x86_64-cc" ;;
-        aarch64_macos)      openssl_target="darwin64-arm64-cc" ;;
-        x86_64_freebsd|x86_64_openbsd|x86_64_netbsd)     openssl_target="BSD-x86_64" ;;
-        aarch64_freebsd|aarch64_openbsd|aarch64_netbsd)  openssl_target="BSD-generic64" ;;
-        riscv64_freebsd)    openssl_target="BSD-generic64" ;;
-        x86_64_windows|aarch64_windows) openssl_target="mingw64" ;;
-        *)
-            case $arch in
-                x86_64) openssl_target="linux-x86_64" ;;
-                ix86le|i486) openssl_target="linux-x86" ;;
-                armv7m|armv7r)
-                    # Cortex-M/R profiles are Thumb-only — OpenSSL ARM assembly
-                    # assumes full ARM mode, so disable it and use a generic target
-                    openssl_target="linux-generic32"
-                    ;;
-                arm*)
-                    if [[ "$arch" == *"v7"* ]]; then
-                        openssl_target="linux-armv4"
-                    else
-                        openssl_target="linux-generic32"
-                    fi
-                    ;;
-                aarch64*) openssl_target="linux-aarch64" ;;
-                mips64n32*) openssl_target="linux-mips64" ;;
-                mips64*) openssl_target="linux64-mips64" ;;
-                mips*) openssl_target="linux-mips32" ;;
-                ppc64*) openssl_target="linux-ppc64le" ;;
-                ppc32*) openssl_target="linux-ppc" ;;
-                riscv64) openssl_target="linux-generic64" ;;
-                riscv32) openssl_target="linux-generic32" ;;
-                s390x) openssl_target="linux-s390x" ;;
-                sh*) openssl_target="linux-generic32" ;;
-                *) openssl_target="linux-generic32" ;;
-            esac
-            ;;
-    esac
-    
+    local openssl_target=$(get_openssl_target "$arch")
+
     # Save and unset CROSS_COMPILE — OpenSSL's Configure uses it to prefix
     # compiler names, which conflicts with our already-set CC. We restore it
     # after Configure so downstream builds (socat-ssl, curl-full, etc.) work.
     local _saved_cross_compile="${CROSS_COMPILE:-}"
     unset CROSS_COMPILE
 
-    # For s390x, we need to use linux64-s390x instead of linux-s390x
-    if [ "$arch" = "s390x" ]; then
-        openssl_target="linux64-s390x"
-    fi
-    
     # Build zlib first if enabling zlib support
     local zlib_dir=$(build_zlib_cached "$arch") || {
         log_error "Failed to build zlib for OpenSSL"
         return 1
     }
 
-    # Disable assembly for Thumb-only ARM profiles (Cortex-M/R) and for
-    # aarch64-windows / thumb-windows where our mingw64 Configure target
-    # expects x86_64 asm.
-    local openssl_asm_opt=""
-    case "$arch" in
-        armv7m|armv7r) openssl_asm_opt="no-asm" ;;
-        aarch64_windows|thumb_windows) openssl_asm_opt="no-asm" ;;
-    esac
-
-    # riscv32 lacks legacy __NR_io_getevents syscall (only has time64 variants),
-    # so the AF_ALG engine won't compile
-    local openssl_afalg_opt=""
-    case "$arch" in
-        riscv32) openssl_afalg_opt="no-afalgeng" ;;
-    esac
+    local openssl_asm_opt=$(get_openssl_asm_opt "$arch")
+    local openssl_afalg_opt=$(get_openssl_afalg_opt "$arch")
+    local openssl_devcrypto_opt=$(get_openssl_devcrypto_opt "$arch")
 
     # Darwin/BSD via Zig can't do fully static binaries — pass -static only where supported
     local openssl_static_opt="-static"
     if ! platform_supports_static; then
         openssl_static_opt=""
     fi
-
-    # OpenSSL's devcrypto engine needs Linux's /dev/crypto headers (crypto/cryptodev.h).
-    # BSDs / macOS don't ship it; disable the engine on non-Linux Zig targets.
-    local openssl_devcrypto_opt=""
-    case "$arch" in
-        *_macos|*_freebsd|*_openbsd|*_netbsd|*_dragonfly)
-            openssl_devcrypto_opt="no-devcryptoeng"
-            ;;
-    esac
 
     ./Configure \
         --prefix="$cache_dir" \
