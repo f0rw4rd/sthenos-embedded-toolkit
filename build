@@ -670,11 +670,8 @@ else
     DEBUG_CMD=""
 fi
 
-# LIBC_TYPE is left unset unless explicitly specified via --libc flag
-# or when building custom-glibc tool
-if [ "$TOOLS" = "custom-glibc" ]; then
-    LIBC_TYPE="glibc"
-fi
+# LIBC_TYPE is left unset unless explicitly specified via --libc flag.
+# (Use `custom --libc glibc` to build the example tool against glibc.)
 
 
 if [ "$ARCHITECTURES" != "all" ]; then

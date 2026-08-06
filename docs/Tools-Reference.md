@@ -209,12 +209,12 @@ ls output/x86_64/shell/
 
 ### Custom Tools
 
-#### custom / custom-glibc
+#### custom
 **Example custom tool** - Template for adding your own C programs.
 
 ```bash
 ./build custom --arch riscv64
-./build custom-glibc --arch x86_64  # glibc version
+./build custom --libc glibc --arch x86_64  # glibc version
 ./output/riscv64/custom
 ```
 

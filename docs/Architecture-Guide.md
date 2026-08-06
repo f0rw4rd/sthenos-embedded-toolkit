@@ -193,14 +193,13 @@ graph TB
     subgraph mipsbe["MIPS Big Endian"]
         mips32be --> mips64
         mips64n32["n32"] --> mips64
-        mipsn32 --> mips64
     end
     
     %% MIPS LE family
     subgraph mipsle["MIPS Little Endian"]
         mips32le --> mips64le
+        mips32r6el --> mips64le
         mips64n32el["n32el"] --> mips64le
-        mipsn32el --> mips64le
     end
     
     %% PowerPC family
@@ -214,7 +213,7 @@ graph TB
     classDef subgraphStyle fill:#f9f9f9,stroke:#666,stroke-width:1px
     
     class x86_64,aarch64,aarch64_be,mips64,mips64le,ppc64be arch64
-    class i486,ix86le,arm32v7le,arm32v7lehf,arm32v7neon,armv7m,armv7r,armelhf,armebv7hf,mips32be,mips32le,ppc32be,x86_64_x32,mips64n32,mips64n32el,mipsn32,mipsn32el arch32
+    class i486,ix86le,arm32v7le,arm32v7lehf,arm32v7neon,armv7m,armv7r,armelhf,armebv7hf,mips32be,mips32le,mips32r6el,ppc32be,x86_64_x32,mips64n32,mips64n32el arch32
     class x86,armle,armbe,mipsbe,mipsle,ppc subgraphStyle
 ```
 
