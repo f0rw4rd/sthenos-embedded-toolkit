@@ -239,6 +239,9 @@ WRAPPER_EOF
 
     # Traditional GCC/toolchain mode
     export USE_ZIG=0
+    # Clear any Zig target left over from a previous arch in the same process,
+    # so nothing keyed on ZIG_TARGET misreads a GCC build as a Zig one.
+    unset ZIG_TARGET
     export DEPS_PREFIX="gcc"
 
     if ! is_valid_arch "$arch"; then
