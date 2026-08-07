@@ -221,6 +221,7 @@ configure_libpcap() {
 
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --prefix="$cache_dir" \
         --disable-shared \
         --enable-static \
@@ -336,6 +337,7 @@ configure_ncurses() {
     
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --prefix="$cache_dir" \
         --enable-static \
         --disable-shared \
@@ -408,6 +410,7 @@ configure_readline() {
     
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --prefix="$cache_dir" \
         --enable-static \
         --disable-shared \
@@ -488,6 +491,7 @@ configure_libelf() {
     
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --prefix="$cache_dir" \
         --enable-static \
         --disable-shared \
@@ -755,6 +759,7 @@ configure_libssh2() {
     
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --prefix="$cache_dir" \
         --with-openssl \
         --with-libssl-prefix="$openssl_dir" \

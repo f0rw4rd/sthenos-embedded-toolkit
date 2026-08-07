@@ -51,6 +51,7 @@ build_dropbear() {
     LDFLAGS="${LDFLAGS:-} $ldflags" \
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --disable-zlib \
         --disable-syslog \
         --disable-lastlog \

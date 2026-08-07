@@ -57,6 +57,7 @@ build_socat() {
 
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --cache-file=config.cache \
         --disable-openssl \
         --disable-readline \

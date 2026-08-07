@@ -40,6 +40,7 @@ build_bash() {
     ac_cv_func_strtoimax=no \
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --enable-static-link \
         --without-bash-malloc \
         --disable-nls \

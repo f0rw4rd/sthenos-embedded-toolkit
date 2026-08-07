@@ -67,6 +67,7 @@ build_tcpdump() {
     ac_cv_func_bpf_dump=yes \
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --enable-static \
         --disable-shared \
         --without-crypto \

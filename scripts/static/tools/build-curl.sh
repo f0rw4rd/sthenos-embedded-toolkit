@@ -65,6 +65,7 @@ EOF
     
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --prefix=/usr \
         --enable-static \
         --disable-shared \

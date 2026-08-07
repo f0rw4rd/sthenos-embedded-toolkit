@@ -82,6 +82,7 @@ PATCH
 
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --target=$HOST \
         --prefix=/usr \
         --disable-gdb \

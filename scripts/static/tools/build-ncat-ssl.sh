@@ -118,6 +118,7 @@ PYEOF
 
     local configure_args=(
         --host=$HOST
+        --build=x86_64-pc-linux-gnu
         --with-openssl=$ssl_dir
         --without-zenmap
         --without-ndiff

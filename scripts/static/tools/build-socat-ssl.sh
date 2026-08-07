@@ -87,6 +87,7 @@ build_socat_ssl() {
     LIBS="-lssl -lcrypto -lreadline -lncurses" \
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --cache-file=config.cache \
         --enable-openssl \
         --disable-libwrap \

@@ -229,6 +229,12 @@ standard_configure() {
     
     local common_args=(
         "--host=$HOST"
+        # Pin --build so autoconf treats this as cross-compiling deterministically.
+        # Without it, configure runs a target binary to "detect" cross-compiling;
+        # with qemu-binfmt registered that binary RUNS, so autoconf decides it is
+        # NOT cross-compiling and then executes every run-test — one of which
+        # (e.g. curl's getifaddrs on aarch64_be) hangs forever under qemu.
+        "--build=x86_64-pc-linux-gnu"
         "--enable-static"
         "--disable-shared"
         "--disable-nls"
