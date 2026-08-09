@@ -54,6 +54,8 @@ get_openssl_target() {
         ppc32*) t="linux-ppc" ;;
         riscv64) t="linux-generic64" ;;
         riscv32) t="linux-generic32" ;;
+        loongarch64) t="linux-generic64" ;;   # 64-bit; no loongarch asm target in 1.1.1w
+        sparc64) t="linux-generic64" ;;        # 64-bit; avoid the 32-bit default
         s390x) t="linux64-s390x" ;;
         sh*) t="linux-generic32" ;;
         *) t="linux-generic32" ;;
