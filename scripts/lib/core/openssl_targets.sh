@@ -34,7 +34,12 @@ get_openssl_target() {
         # asm-free generic64 (valid BSD targets: generic32/64, x86, x86_64,
         # aarch64, riscv64, sparc*, ia64).
         powerpc64_freebsd|powerpc64le_freebsd)           echo "BSD-generic64";  return ;;
+        # Additional NetBSD arches (asm-free generic profiles; no BSD-mips/ppc
+        # target exists in OpenSSL 1.1.1, and sparc64/aarch64_be use generic64).
+        mips_netbsd|mipsel_netbsd|powerpc_netbsd)        echo "BSD-generic32";  return ;;
+        sparc64_netbsd|aarch64_be_netbsd)                echo "BSD-generic64";  return ;;
         x86_64_windows|aarch64_windows) echo "mingw64"; return ;;
+        x86_windows)                    echo "mingw";   return ;;
     esac
 
     # Native Linux GCC arches.
@@ -73,7 +78,7 @@ get_openssl_asm_opt() {
         # OpenSSL's 32-bit x86 BSD perlasm (aesni-x86.s, bf-586.s, ...) emits
         # .align directives Zig's LLVM assembler rejects ("alignment must be a
         # power of 2"); build these without asm.
-        x86_freebsd|x86_openbsd|x86_netbsd) echo "no-asm" ;;
+        x86_freebsd|x86_openbsd|x86_netbsd|x86_windows) echo "no-asm" ;;
         *) echo "" ;;
     esac
 }

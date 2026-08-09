@@ -79,6 +79,11 @@ setup_arch() {
         if [[ "${parts[0]}" == "x86" ]] && [[ "${parts[1]}" == "64" ]]; then
             arch_part="x86_64"
             parts=("${parts[@]:2}")  # Remove first two elements
+        elif [[ "${parts[0]}" == "aarch64" ]] && [[ "${parts[1]}" == "be" ]]; then
+            # aarch64_be keeps its underscore in the Zig arch name
+            # (aarch64_be-netbsd), so pull both segments before the OS.
+            arch_part="aarch64_be"
+            parts=("${parts[@]:2}")  # Remove first two elements
         else
             parts=("${parts[@]:1}")  # Remove first element
         fi
