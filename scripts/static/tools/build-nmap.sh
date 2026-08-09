@@ -149,6 +149,7 @@ build_nmap() {
     
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --without-ndiff \
         --without-zenmap \
         --without-nmap-update \

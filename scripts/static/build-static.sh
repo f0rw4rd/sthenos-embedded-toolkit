@@ -123,6 +123,16 @@ do_static_build() {
         fi
     fi
     
+    # Reset LIBC_TYPE for THIS arch. do_static_build runs in the shared
+    # run_static_builds process (not a subshell), so a uclibc/glibc arch that
+    # exported LIBC_TYPE would otherwise leave it stuck for the next arch — a
+    # musl arch would then fail setup_arch with "No toolchain defined".
+    case "$libc" in
+        uclibc) export LIBC_TYPE="uclibc" ;;
+        glibc)  export LIBC_TYPE="glibc" ;;
+        *)      unset LIBC_TYPE ;;   # musl / default — let setup_arch choose
+    esac
+
     if [ "$libc" = "glibc" ]; then
         local log_file=""
         if [ "$log_enabled" = "true" ]; then
@@ -153,12 +163,8 @@ do_static_build() {
         fi
         return $result
     else
-        # LIBC_TYPE flows into the child build script invoked by build_tool,
-        # which re-runs setup_arch — so uclibc archs need the env var set here.
-        if [ "$libc" = "uclibc" ]; then
-            export LIBC_TYPE="uclibc"
-        fi
-
+        # LIBC_TYPE was already set for this arch above (uclibc archs need it so
+        # setup_arch and the child build script pick the uclibc toolchain).
         if ! setup_arch "$canonical_arch"; then
             log_error "Failed to setup architecture"
             return 1

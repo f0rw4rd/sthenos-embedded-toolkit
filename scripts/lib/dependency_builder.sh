@@ -109,6 +109,17 @@ configure_openssl() {
     
     local openssl_target=$(get_openssl_target "$arch")
 
+    # musl's strerror_r is POSIX-signature (returns int) even under _GNU_SOURCE.
+    # OpenSSL 1.1.1w's crypto/o_str.c hardcodes the GNU (char*-returning)
+    # signature under _GNU_SOURCE, tripping -Wint-conversion on strict GCC
+    # (e.g. loongarch64 musl 13.x, where it's a hard error). Require __GLIBC__
+    # too so musl falls through to the POSIX/XSI branch. Mirrors the same patch
+    # in the standalone scripts/static/tools/build-openssl.sh. Runs while
+    # CROSS_COMPILE is still set (it is unset just below for Configure).
+    if [ "${LIBC_TYPE:-}" = "musl" ] || [[ "${CROSS_COMPILE:-}" == *musl* ]]; then
+        sed -i 's|^#elif defined(_GNU_SOURCE)$|#elif defined(_GNU_SOURCE) \&\& defined(__GLIBC__)|' crypto/o_str.c
+    fi
+
     # Save and unset CROSS_COMPILE — OpenSSL's Configure uses it to prefix
     # compiler names, which conflicts with our already-set CC. We restore it
     # after Configure so downstream builds (socat-ssl, curl-full, etc.) work.
@@ -221,6 +232,7 @@ configure_libpcap() {
 
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --prefix="$cache_dir" \
         --disable-shared \
         --enable-static \
@@ -336,6 +348,7 @@ configure_ncurses() {
     
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --prefix="$cache_dir" \
         --enable-static \
         --disable-shared \
@@ -408,6 +421,7 @@ configure_readline() {
     
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --prefix="$cache_dir" \
         --enable-static \
         --disable-shared \
@@ -488,6 +502,7 @@ configure_libelf() {
     
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --prefix="$cache_dir" \
         --enable-static \
         --disable-shared \
@@ -755,6 +770,7 @@ configure_libssh2() {
     
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --prefix="$cache_dir" \
         --with-openssl \
         --with-libssl-prefix="$openssl_dir" \

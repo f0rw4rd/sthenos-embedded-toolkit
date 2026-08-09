@@ -44,6 +44,7 @@ configure_screen() {
 
     ./configure \
         --host=$HOST \
+        --build=x86_64-pc-linux-gnu \
         --enable-static \
         --disable-shared \
         --disable-pam \

@@ -12,13 +12,15 @@ source "$BUILD_DIR/scripts/lib/core/arch_helper.sh"
 source "$BUILD_DIR/scripts/lib/core/compile_flags.sh"
 source "$BUILD_DIR/scripts/lib/supported.sh"
 
-# If no LIBC_TYPE specified, build for both
-if [ -z "${LIBC_TYPE:-}" ]; then
-    BUILD_BOTH_LIBC=true
-    LIBC_TYPES=("musl" "glibc")
-else
+# Shared libs support musl and glibc only. Honor an explicit musl/glibc request;
+# for anything else (unset, or a value leaked from the static build such as
+# uclibc) build both, which is the intended default.
+if [ "${LIBC_TYPE:-}" = "musl" ] || [ "${LIBC_TYPE:-}" = "glibc" ]; then
     BUILD_BOTH_LIBC=false
     LIBC_TYPES=("$LIBC_TYPE")
+else
+    BUILD_BOTH_LIBC=true
+    LIBC_TYPES=("musl" "glibc")
 fi
 
 LOG_ENABLED="${LOG_ENABLED:-true}"

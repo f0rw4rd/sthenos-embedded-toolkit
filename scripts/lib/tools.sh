@@ -27,11 +27,21 @@ build_tool() {
         return 1
     fi
     
+    # Cap each build so a single hang (a stuck configure run-test under qemu, a
+    # wedged make, a network stall) can't stall the whole matrix. On timeout the
+    # build is killed and counted as a failure, and the loop moves on.
+    local to="${TOOL_BUILD_TIMEOUT:-1800}"
+    local rc
     if [ -n "$DEBUG" ]; then
-        bash -x "$script" "$arch"
+        timeout -k 60 -s TERM "$to" bash -x "$script" "$arch"
     else
-        bash "$script" "$arch"
-    fi   
+        timeout -k 60 -s TERM "$to" bash "$script" "$arch"
+    fi
+    rc=$?
+    if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+        echo "TIMEOUT: $tool for $arch exceeded ${to}s — killed" >&2
+    fi
+    return $rc
 }
 
 export -f parallel_make
