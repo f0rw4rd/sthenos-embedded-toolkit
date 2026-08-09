@@ -10,9 +10,13 @@ source "$LIB_DIR/build_helpers.sh"
 source "$LIB_DIR/shared_lib_helpers.sh"
 
 TOOL_NAME="tls-noverify"
-# TODO: find more uniqe name for github main.tar.gz downloads, will be a mess with the next tool from github
-TLS_PRELOADER_URL="https://github.com/f0rw4rd/tls-preloader/archive/refs/heads/main.tar.gz"
-TLS_PRELOADER_SHA512="c006b39c478261970e75c4008e027423866ed8b6682c4e45701dc8f46fbda4b79124f6213d774acfcae782f6f23f6061e2d252965a522a83a751989a32acb505"
+# Pin to an immutable commit archive, not refs/heads/main.tar.gz: GitHub
+# regenerates the branch tarball whenever main moves (and can re-tar it), which
+# breaks the pinned SHA512. A per-commit archive is stable, and its <sha>.tar.gz
+# filename also avoids the main.tar.gz name collision across github tools.
+TLS_PRELOADER_COMMIT="44579e80c6c9f9fd831765fa87f34703d942e4d5"
+TLS_PRELOADER_URL="https://github.com/f0rw4rd/tls-preloader/archive/${TLS_PRELOADER_COMMIT}.tar.gz"
+TLS_PRELOADER_SHA512="eacb6208a48456e43513f1be9ec2a071d128709ea45b4814277aecc9b9d1568c71d4071ed6f4a6972fb6d9d438dc90da94df36d3a0c3f3b906abeca210a2fbec"
 
 # Main execution when called as script
 main() {
@@ -58,7 +62,7 @@ main() {
     fi
     
     cd "$src_dir"
-    log "Using tls-preloader from main branch"
+    log "Using tls-preloader pinned at ${TLS_PRELOADER_COMMIT:0:12}"
     
     local orig_dir="$(pwd)"
     
